@@ -31,8 +31,8 @@ public class PopulationToTrips {
                 Plan plan = person.getSelectedPlan();
                 if (plan != null) {
                     // Assuming the plan has at least two activities (like home-work-home)
+                    int trip_id = 0;
                     for (int i = 0; i < plan.getPlanElements().size() - 1; i++) {
-                        int trip_id = 0;
                         PlanElement pe = plan.getPlanElements().get(i);
                         if (pe instanceof Activity) {
                             trip_id++;
@@ -46,7 +46,7 @@ public class PopulationToTrips {
                                     origin.getCoord().getY() + "," +
                                     destination.getCoord().getX() + "," +
                                     destination.getCoord().getY() + "," +
-                                    leg.getDepartureTime() + "\n");
+                                    leg.getDepartureTime().seconds() + "\n");
                         }
                     }
                 }
