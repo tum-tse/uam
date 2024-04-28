@@ -1,7 +1,6 @@
 package org.eqasim.sao_paulo.siting.utils;
 
 import org.matsim.api.core.v01.Scenario;
-import org.matsim.api.core.v01.network.Network;
 import org.matsim.api.core.v01.population.*;
 import org.matsim.core.config.Config;
 import org.matsim.core.config.ConfigUtils;
@@ -25,7 +24,7 @@ public class PopulationToTrips {
 
         try (BufferedWriter writer = IOUtils.getBufferedWriter(outputCsvFile)) {
             // Write CSV header
-            writer.write("trip_id,originX,originY,destinationX,destinationY,start_time\n"); //,travel_time_pt,distance_pt,in_vehicle_time_pt,waiting_time_pt,travel_time_car,distance_car,purpose,car_cost,pt_cost,car_utility,pt_utility,uam_utility_fix,car_generalized_cost,pt_generalized_cost,income
+            writer.write("trip_id,originX,originY,destinationX,destinationY,start_time,trip_purpose\n"); //,travel_time_pt,distance_pt,in_vehicle_time_pt,waiting_time_pt,travel_time_car,distance_car,purpose,car_cost,pt_cost,car_utility,pt_utility,uam_utility_fix,car_generalized_cost,pt_generalized_cost,income
 
             for (Person person : scenario.getPopulation().getPersons().values()) {
                 Plan plan = person.getSelectedPlan();
@@ -46,7 +45,8 @@ public class PopulationToTrips {
                                     origin.getCoord().getY() + "," +
                                     destination.getCoord().getX() + "," +
                                     destination.getCoord().getY() + "," +
-                                    leg.getDepartureTime().seconds() + "\n");
+                                    leg.getDepartureTime().seconds() + "," +
+                                    destination.getType() + "\n");
                         }
                     }
                 }
