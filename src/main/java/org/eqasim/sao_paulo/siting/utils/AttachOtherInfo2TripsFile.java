@@ -16,7 +16,6 @@ import org.matsim.core.config.Config;
 import org.matsim.core.config.ConfigUtils;
 import org.matsim.core.population.io.PopulationReader;
 import org.matsim.core.scenario.ScenarioUtils;
-import org.matsim.core.utils.io.IOUtils;
 
 import org.matsim.households.Household;
 import org.matsim.households.Households;
@@ -75,11 +74,25 @@ public class AttachOtherInfo2TripsFile {
                 String destinationX = carData[3];
                 String destinationY = carData[4];
                 String startTime = carData[5];
-                //TODO: PT utility should be set to negative infinity when there is not pt route for this trip/这样的话pt的utility就会非常小，选pt的概率就是0 了吗？
-                double travelTimePt = Double.parseDouble(ptData[8]);
-                double distancePt = Double.parseDouble(ptData[9]);
-                double inVehicleTimePt = Double.parseDouble(ptData[7]);
-                double waitingTimePt = Double.parseDouble(ptData[6]);
+
+                //set pt wait time and in vehicle time to 500000 and pt travel time to 1000000, so that pt's utility is very tiny!
+                String description = ptData[10];
+                double travelTimePt;
+                double inVehicleTimePt;
+                double waitingTimePt;
+                double distancePt;
+                if (description != null){
+                    travelTimePt = Double.parseDouble(ptData[8]);
+                    inVehicleTimePt = Double.parseDouble(ptData[7]);
+                    waitingTimePt = Double.parseDouble(ptData[6]);
+                    distancePt = Double.parseDouble(ptData[9]);
+                } else {
+                    travelTimePt = 1000000;
+                    inVehicleTimePt = 500000;
+                    waitingTimePt = 500000;
+                    distancePt = 0;
+                }
+
                 double travelTimeCar = Double.parseDouble(carData[6]);
                 double distanceCar = Double.parseDouble(carData[7]);
 
@@ -107,7 +120,7 @@ public class AttachOtherInfo2TripsFile {
                 double income = Double.parseDouble(String.valueOf(householdIncome/householdSize));
                 double car_utility = calculateCarUtility(saoPauloModeParametersarameters, saoPauloCostParametersarameters, travelTimeCar, distanceCar);
                 double pt_utility = calculatePtUtility(saoPauloModeParametersarameters, saoPauloCostParametersarameters, ptTransfers, waitingTimePt, inVehicleTimePt, (Boolean) person.getAttributes().getAttribute("hasPtSubscription"));
-                double uam_utility_fix = 0; //TODO TODO: need to specify this!!!
+                double uam_utility_fix = saoPauloModeParametersarameters.spTaxi.alpha_u; //TODO: maybe need to rethink!
                 double vot = income/householdSize/2086; // 2086 = 365*8*(5/7) TODO: check this
                 double car_generalized_cost = car_cost + (vot * travelTimeCar);
                 double pt_generalized_cost = pt_cost + (vot * travelTimePt);
