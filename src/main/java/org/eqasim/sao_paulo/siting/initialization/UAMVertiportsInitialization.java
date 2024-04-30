@@ -52,7 +52,7 @@ public class UAMVertiportsInitialization {
 
 
         // KMeansPlusPlusSmile
-        int k = 30;
+        int k = 200;
         KMeans kmeans = KMeans.fit(data, k/*, KMeans.Initialization.K_MEANS_PLUS_PLUS*/);
 
 /*        System.out.println("Cluster labels:");
@@ -62,7 +62,8 @@ public class UAMVertiportsInitialization {
 
         // Save clusters to CSV
         try {
-            saveClustersAsCSV(kmeans.centroids, "src/main/java/org/eqasim/sao_paulo/siting/initialization/stations.csv");
+            //saveClustersAsCSV(kmeans.centroids, "src/main/java/org/eqasim/sao_paulo/siting/initialization/stations.csv");
+            saveClustersAsCSVForOptimization(kmeans.centroids, "src/main/java/org/eqasim/sao_paulo/siting/initialization/Vertiports.csv");
         } catch (IOException e) {
             System.err.println("Error while saving CSV: " + e.getMessage());
         }
@@ -79,6 +80,23 @@ public class UAMVertiportsInitialization {
             double x = centroids[i][0];
             double y = centroids[i][1];
             csvWriter.append(String.format("%d,Station%d,%.3f,%.3f,0,600,10000,10000,10000,10000,300,300,300\n", i + 1, i + 1, x, y));
+        }
+
+        csvWriter.flush();
+        csvWriter.close();
+    }
+    private static void saveClustersAsCSVForOptimization(double[][] centroids, String filePath) throws IOException {
+        FileWriter csvWriter = new FileWriter(filePath);
+
+        // Write header
+        csvWriter.append("vertiportID, vertiportX, vertiportY, ConstructionCost\n");
+
+        // Write centroids data
+        for (int i = 0; i < centroids.length; i++) {
+            double x = centroids[i][0];
+            double y = centroids[i][1];
+            double cost = 1.0;
+            csvWriter.append(String.format("%d,%.3f,%.3f,%.1f\n", i + 1, x, y, cost));
         }
 
         csvWriter.flush();

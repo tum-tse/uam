@@ -125,8 +125,8 @@ public class AttachOtherInfo2TripsFile {
                 double car_generalized_cost = car_cost + (vot * travelTimeCar);
                 double pt_generalized_cost = pt_cost + (vot * travelTimePt);
 
-                String mergedLine = String.format("%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s\n",
-                        tripId, originX, originY, destinationX, destinationY, startTime, travelTimePt, distancePt,
+                String mergedLine = String.format("%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s\n",
+                        tripId, personId, originX, originY, destinationX, destinationY, startTime, travelTimePt, distancePt,
                         inVehicleTimePt, waitingTimePt, travelTimeCar, distanceCar, purpose, car_cost, pt_cost, car_utility, pt_utility, uam_utility_fix, car_generalized_cost, pt_generalized_cost, income);
 
                 writer.write(mergedLine);
