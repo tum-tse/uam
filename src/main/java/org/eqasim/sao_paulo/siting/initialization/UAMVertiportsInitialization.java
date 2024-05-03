@@ -16,8 +16,11 @@ import java.io.FileWriter;
 import java.io.IOException;
 
 public class UAMVertiportsInitialization {
-    public static void main(String[] args) {
 
+    //z,vtol_z,ground_access_capacity,ground_access_freespeed,flight_access_capacity,flight_access_freespeed,preflighttime,postflighttime,defaultwaittime
+    public static final String defaultCSVValues = "0,600,10000,10000,10000,10000,300,300,300";
+
+    public static void main(String[] args) {
         // extract the input for clustering
         String filename = "scenarios/1-percent/sao_paulo_population.xml.gz";
         Config config = ConfigUtils.createConfig();
@@ -62,14 +65,14 @@ public class UAMVertiportsInitialization {
 
         // Save clusters to CSV
         try {
-            //saveClustersAsCSV(kmeans.centroids, "src/main/java/org/eqasim/sao_paulo/siting/initialization/stations.csv");
+            saveClustersAsCSV(kmeans.centroids, "src/main/java/org/eqasim/sao_paulo/siting/initialization/stations.csv", defaultCSVValues);
             saveClustersAsCSVForOptimization(kmeans.centroids, "src/main/java/org/eqasim/sao_paulo/siting/initialization/Vertiports.csv");
         } catch (IOException e) {
             System.err.println("Error while saving CSV: " + e.getMessage());
         }
     }
 
-    private static void saveClustersAsCSV(double[][] centroids, String filePath) throws IOException {
+    private static void saveClustersAsCSV(double[][] centroids, String filePath, String defaultValues) throws IOException {
         FileWriter csvWriter = new FileWriter(filePath);
 
         // Write header
@@ -79,7 +82,8 @@ public class UAMVertiportsInitialization {
         for (int i = 0; i < centroids.length; i++) {
             double x = centroids[i][0];
             double y = centroids[i][1];
-            csvWriter.append(String.format("%d,Station%d,%.3f,%.3f,0,600,10000,10000,10000,10000,300,300,300\n", i + 1, i + 1, x, y));
+            int stationId = i + 1;
+            csvWriter.append(String.format("%d,Station%d,%.3f,%.3f,%s\n", stationId, stationId, x, y, defaultValues));
         }
 
         csvWriter.flush();
