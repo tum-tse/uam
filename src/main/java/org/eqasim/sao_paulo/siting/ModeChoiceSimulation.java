@@ -8,10 +8,10 @@ public class ModeChoiceSimulation {
     private static final long SEED = 4711; // MATSim default Random Seed
 
     public static void main(String[] args) throws IOException {
-        List<Trip> trips = readTrips("path_to_your_trip_data.csv");
+        List<Trip> trips = readTrips("scenarios/1-percent/UpdatedFinalTrips.csv");
         Random random = new Random(SEED); // Set the seed here
-        List<ModeChoiceScenario> scenarios = generateScenarios(trips, SCENARIOS_COUNT, random);
-        saveScenarios(scenarios, "mode_choice_scenarios.csv");
+        List<List<ModeChoiceScenario>> allScenarios = generateScenarios(trips, SCENARIOS_COUNT, random);
+        saveScenarios(allScenarios, "src/main/java/org/eqasim/sao_paulo/siting/mode_choice_scenarios.csv");
     }
 
     private static List<Trip> readTrips(String filename) throws IOException {
@@ -27,15 +27,17 @@ public class ModeChoiceSimulation {
         return trips;
     }
 
-    private static List<ModeChoiceScenario> generateScenarios(List<Trip> trips, int numScenarios, Random random) {
-        List<ModeChoiceScenario> scenarios = new ArrayList<>();
+    private static List<List<ModeChoiceScenario>> generateScenarios(List<Trip> trips, int numScenarios, Random random) {
+        List<List<ModeChoiceScenario>> allScenarios = new ArrayList<>();
         for (Trip trip : trips) {
-            for (int i = 0; i < numScenarios; i++) {
+            List<ModeChoiceScenario> tripScenarios = new ArrayList<>();
+            for (int i = 1; i <= numScenarios; i++) { // Scenario index starts at 1
                 String modeChoice = predictModeChoice(trip, random);
-                scenarios.add(new ModeChoiceScenario(trip.tripId, modeChoice));
+                tripScenarios.add(new ModeChoiceScenario(trip.tripId, modeChoice));
             }
+            allScenarios.add(tripScenarios);
         }
-        return scenarios;
+        return allScenarios;
     }
 
     private static String predictModeChoice(Trip trip, Random random) {
@@ -53,11 +55,22 @@ public class ModeChoiceSimulation {
         }
     }
 
-    private static void saveScenarios(List<ModeChoiceScenario> scenarios, String filename) throws IOException {
+    private static void saveScenarios(List<List<ModeChoiceScenario>> allScenarios, String filename) throws IOException {
         try (BufferedWriter writer = new BufferedWriter(new FileWriter(filename))) {
-            writer.write("trip_id,mode_choice\n");
-            for (ModeChoiceScenario scenario : scenarios) {
-                writer.write(scenario.tripId + "," + scenario.modeChoice + "\n");
+            // Write header
+            StringBuilder header = new StringBuilder("trip_id");
+            for (int i = 1; i <= allScenarios.get(0).size(); i++) {
+                header.append(",Scenario ").append(i);
+            }
+            writer.write(header.toString() + "\n");
+
+            // Write data rows
+            for (List<ModeChoiceScenario> scenarios : allScenarios) {
+                StringBuilder row = new StringBuilder(scenarios.get(0).tripId); // Assumes all scenarios have the same tripId
+                for (ModeChoiceScenario scenario : scenarios) {
+                    row.append(",").append(scenario.modeChoice);
+                }
+                writer.write(row.toString() + "\n");
             }
         }
     }
