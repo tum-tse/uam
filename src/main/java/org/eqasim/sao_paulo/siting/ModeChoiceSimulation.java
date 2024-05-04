@@ -15,7 +15,7 @@ public class ModeChoiceSimulation {
         Random random = new Random(SEED); // Set the seed here
         List<List<ModeChoiceScenario>> allScenarios = new ArrayList<>();
 
-        if (!IF_ENABLE_CONVERGE){
+        if (IF_ENABLE_CONVERGE){
             // Start with some number of scenarios and increase until convergence
             int numScenarios = 10; // Initial number of scenarios
             double lastAverage = 0;
