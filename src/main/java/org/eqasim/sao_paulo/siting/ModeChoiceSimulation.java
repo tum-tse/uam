@@ -4,14 +4,41 @@ import java.io.*;
 import java.util.*;
 
 public class ModeChoiceSimulation {
-    private static final int SCENARIOS_COUNT = 100;
     private static final long SEED = 4711; // MATSim default Random Seed
-    private static final double THRESHOLD = 59.0;
+    private static final double THRESHOLD = 75.0;
+    private static final boolean IF_ENABLE_CONVERGE = false;
+    private static final double CONVERGENCE_TOLERANCE = 0.0001; // Tolerance for convergence
+    private static final int SCENARIOS_COUNT = 1000;
 
     public static void main(String[] args) throws IOException {
         List<Trip> trips = readTrips("scenarios/1-percent/UpdatedFinalTrips.csv");
         Random random = new Random(SEED); // Set the seed here
-        List<List<ModeChoiceScenario>> allScenarios = generateScenarios(trips, SCENARIOS_COUNT, random);
+        List<List<ModeChoiceScenario>> allScenarios = new ArrayList<>();
+
+        if (!IF_ENABLE_CONVERGE){
+            // Start with some number of scenarios and increase until convergence
+            int numScenarios = 10; // Initial number of scenarios
+            double lastAverage = 0;
+            boolean hasConverged = false;
+
+            while (!hasConverged) {
+                allScenarios = generateScenarios(trips, numScenarios, random);
+                double currentAverage = calculateAverageUamFrequency(allScenarios);
+
+                if (Math.abs(currentAverage - lastAverage) < CONVERGENCE_TOLERANCE && numScenarios > 10) {
+                    hasConverged = true;
+                } else {
+                    lastAverage = currentAverage;
+                    numScenarios += 10; // Increase the number of scenarios incrementally
+                }
+            }
+
+            System.out.println("Converged with " + numScenarios + " scenarios. Average UAM choice frequency: " + lastAverage);
+        } else {
+            allScenarios = generateScenarios(trips, SCENARIOS_COUNT, random);
+        }
+
+        // Save the converged scenarios
         saveScenarios(allScenarios, "src/main/java/org/eqasim/sao_paulo/siting/mode_choice_scenarios.csv");
 
         // Analyze the scenarios for UAM usage and determine the 75th percentile
@@ -141,5 +168,19 @@ public class ModeChoiceSimulation {
             this.tripId = tripId;
             this.modeChoice = modeChoice;
         }
+    }
+
+    private static double calculateAverageUamFrequency(List<List<ModeChoiceScenario>> allScenarios) {
+        long totalUamCount = 0;
+        long totalCount = 0;
+        for (List<ModeChoiceScenario> scenarios : allScenarios) {
+            for (ModeChoiceScenario scenario : scenarios) {
+                if (scenario.modeChoice.equals("UAM")) {
+                    totalUamCount++;
+                }
+                totalCount++;
+            }
+        }
+        return (double) totalUamCount / totalCount;
     }
 }
