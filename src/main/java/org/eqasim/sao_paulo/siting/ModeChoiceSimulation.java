@@ -6,12 +6,20 @@ import java.util.*;
 public class ModeChoiceSimulation {
     private static final int SCENARIOS_COUNT = 100;
     private static final long SEED = 4711; // MATSim default Random Seed
+    private static final double THRESHOLD = 59.0;
 
     public static void main(String[] args) throws IOException {
         List<Trip> trips = readTrips("scenarios/1-percent/UpdatedFinalTrips.csv");
         Random random = new Random(SEED); // Set the seed here
         List<List<ModeChoiceScenario>> allScenarios = generateScenarios(trips, SCENARIOS_COUNT, random);
         saveScenarios(allScenarios, "src/main/java/org/eqasim/sao_paulo/siting/mode_choice_scenarios.csv");
+
+        // Analyze the scenarios for UAM usage and determine the 75th percentile
+        Map<String, Double> uamFrequencies = calculateUamFrequencies("src/main/java/org/eqasim/sao_paulo/siting/mode_choice_scenarios.csv");
+        double threshold = calculatePercentileThreshold(uamFrequencies, THRESHOLD);
+        saveSelectedTrips(uamFrequencies, threshold, "src/main/java/org/eqasim/sao_paulo/siting/selected_trips.csv");
+
+        System.out.println("Threshold for UAM usage at " + String.valueOf(THRESHOLD) + "th percentile is " + threshold);
     }
 
     private static List<Trip> readTrips(String filename) throws IOException {
@@ -71,6 +79,44 @@ public class ModeChoiceSimulation {
                     row.append(",").append(scenario.modeChoice);
                 }
                 writer.write(row.toString() + "\n");
+            }
+        }
+    }
+
+    private static Map<String, Double> calculateUamFrequencies(String filename) throws IOException {
+        Map<String, Integer> uamCounts = new HashMap<>();
+        Map<String, Integer> totalCounts = new HashMap<>();
+
+        try (BufferedReader reader = new BufferedReader(new FileReader(filename))) {
+            String line = reader.readLine(); // Skip header
+            while ((line = reader.readLine()) != null) {
+                String[] fields = line.split(",");
+                String tripId = fields[0];
+                int uamCount = (int) Arrays.stream(fields).skip(1).filter(choice -> choice.equals("UAM")).count();
+                uamCounts.put(tripId, uamCounts.getOrDefault(tripId, 0) + uamCount);
+                totalCounts.put(tripId, fields.length - 1);  // Exclude tripId from count
+            }
+        }
+
+        Map<String, Double> uamFrequencies = new HashMap<>();
+        uamCounts.forEach((key, value) -> uamFrequencies.put(key, value / (double) totalCounts.get(key)));
+        return uamFrequencies;
+    }
+
+    private static double calculatePercentileThreshold(Map<String, Double> frequencies, double percentile) {
+        double[] values = frequencies.values().stream().mapToDouble(v -> v).toArray();
+        Arrays.sort(values);
+        int index = (int) Math.ceil(percentile / 100.0 * values.length) - 1;
+        return values[index];
+    }
+
+    private static void saveSelectedTrips(Map<String, Double> frequencies, double threshold, String outputFilename) throws IOException {
+        try (BufferedWriter writer = new BufferedWriter(new FileWriter(outputFilename))) {
+            writer.write("trip_id,uam_frequency\n");
+            for (Map.Entry<String, Double> entry : frequencies.entrySet()) {
+                if (entry.getValue() >= threshold) {
+                    writer.write(entry.getKey() + "," + entry.getValue() + "\n");
+                }
             }
         }
     }
