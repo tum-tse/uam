@@ -18,7 +18,7 @@ import java.io.IOException;
 public class UAMVertiportsInitialization {
 
     //z,vtol_z,ground_access_capacity,ground_access_freespeed,flight_access_capacity,flight_access_freespeed,preflighttime,postflighttime,defaultwaittime
-    public static final String defaultCSVValues = "0,600,10000,10000,10000,10000,300,300,300";
+    public static final String defaultCSVValues = "0,600,10000,10000,10000,10000,300,300,0";
 
     public static void main(String[] args) {
         // extract the input for clustering
@@ -65,7 +65,7 @@ public class UAMVertiportsInitialization {
 
         // Save clusters to CSV
         try {
-            saveClustersAsCSV(kmeans.centroids, "src/main/java/org/eqasim/sao_paulo/siting/initialization/stations.csv", defaultCSVValues);
+            //saveClustersAsCSV(kmeans.centroids, "src/main/java/org/eqasim/sao_paulo/siting/initialization/stations.csv", defaultCSVValues);
             saveClustersAsCSVForOptimization(kmeans.centroids, "src/main/java/org/eqasim/sao_paulo/siting/initialization/Vertiports.csv");
         } catch (IOException e) {
             System.err.println("Error while saving CSV: " + e.getMessage());
