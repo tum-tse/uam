@@ -115,8 +115,8 @@ public class TripPooling {
                             Double.parseDouble(parts[4]),
                             Double.parseDouble(parts[5]),
                             Double.parseDouble(parts[17]),
-                            origStation,
-                            destStation,
+                            stations.get(origStation),
+                            stations.get(destStation),
                             tripDetails[12], // purpose
                             tripDetails[20]  // income
                     );
@@ -138,11 +138,11 @@ public class TripPooling {
     private static List<List<UAMTrip>> poolTrips(List<UAMTrip> trips, double timeWindow, Map<Integer, Station> stations) {
         Map<String, List<UAMTrip>> potentialGroups = new HashMap<>();
         for (UAMTrip trip : trips) {
-            trip.calculateWalkingTime(stations); // Calculate walking time to station
             for (UAMTrip otherTrip : trips) {
                 if (trip != otherTrip && areStationsNearby(trip.origStation, otherTrip.origStation, stations) &&
                         areStationsNearby(trip.destStation, otherTrip.destStation, stations) &&
                         Math.abs(trip.departureTime - otherTrip.departureTime) <= timeWindow) {
+                    trip.calculateWalkingTime(otherTrip.origStation); // Calculate walking time to station
 
                     String key = trip.origStation + "_" + trip.destStation;
                     potentialGroups.computeIfAbsent(key, k -> new ArrayList<>()).add(trip);
@@ -156,7 +156,7 @@ public class TripPooling {
         List<List<UAMTrip>> finalGroups = new ArrayList<>();
         for (List<UAMTrip> group : potentialGroups.values()) {
             if (group.size() > UAM_CAPACITY) {
-                group.sort(Comparator.comparingDouble(t -> t.walkingTimeToStation)); // Prioritize by earliest walking time
+                group.sort(Comparator.comparingDouble(t -> t.walkingTimeToPooledStation)); // Prioritize by earliest walking time
                 finalGroups.add(new ArrayList<>(group.subList(0, UAM_CAPACITY)));
             } else {
                 finalGroups.add(group);
@@ -164,11 +164,9 @@ public class TripPooling {
         }
         return finalGroups;
     }
-    private static boolean areStationsNearby(int stationId1, int stationId2, Map<Integer, Station> stations) {
-        Station s1 = stations.get(stationId1);
-        Station s2 = stations.get(stationId2);
+    private static boolean areStationsNearby(Station stationId1, Station stationId2, Map<Integer, Station> stations) {
         // TODO: Use MATSim to calculate the distance
-        double distance = Math.sqrt(Math.pow(s1.x - s2.x, 2) + Math.pow(s1.y - s2.y, 2));
+        double distance = Math.sqrt(Math.pow(stationId1.x - stationId2.x, 2) + Math.pow(stationId1.y - stationId2.y, 2));
         return distance <= SEARCH_RADIUS;
     }
 
@@ -203,13 +201,13 @@ public class TripPooling {
                     pw.println(String.format("%d,%s,%d,%d,%f,%f,%s,%s,%f,%d",
                             groupID,
                             trip.tripId,
-                            trip.origStation,
-                            trip.destStation,
+                            trip.origStation.id,
+                            trip.destStation.id,
                             trip.departureTime,
-                            trip.departureTime - trip.walkingTimeToStation, // Arrival time at station
+                            trip.departureTime - trip.walkingTimeToPooledStation, // Arrival time at station
                             trip.purpose,
                             trip.income,
-                            trip.walkingTimeToStation,
+                            trip.walkingTimeToPooledStation,
                             group.size()));
                 }
                 groupID++;
@@ -220,11 +218,11 @@ public class TripPooling {
     static class UAMTrip {
         String tripId;
         double originX, originY, destX, destY, departureTime, flightDistance;
-        Integer origStation, destStation; // Changed to Integer to handle null values
+        Station origStation, destStation; // Changed to Integer to handle null values
         String purpose, income;
-        double walkingTimeToStation; // Time to walk to the station
+        double walkingTimeToPooledStation; // Time to walk to the station
 
-        UAMTrip(String tripId, double originX, double originY, double destX, double destY, double departureTime, double flightDistance, Integer origStation, Integer destStation, String purpose, String income) {
+        UAMTrip(String tripId, double originX, double originY, double destX, double destY, double departureTime, double flightDistance, Station origStation, Station destStation, String purpose, String income) {
             this.tripId = tripId;
             this.originX = originX;
             this.originY = originY;
@@ -239,14 +237,9 @@ public class TripPooling {
         }
 
         // TODO: Use MATSim to calculate the routes and travel times
-        void calculateWalkingTime(Map<Integer, Station> stations) {
-            if (stations.containsKey(origStation)) {
-                Station station = stations.get(origStation);
-                double distance = Math.sqrt(Math.pow(originX - station.x, 2) + Math.pow(originY - station.y, 2));
-                walkingTimeToStation = distance / WALKING_SPEED;
-            } else {
-                walkingTimeToStation = Double.MAX_VALUE; // Effectively prevents this trip from being pooled if no station info
-            }
+        void calculateWalkingTime(Station station) {
+            double distance = Math.sqrt(Math.pow(originX - station.x, 2) + Math.pow(originY - station.y, 2));
+            walkingTimeToPooledStation = distance / WALKING_SPEED;
         }
     }
 
@@ -260,5 +253,5 @@ public class TripPooling {
             this.y = y;
         }
     }
-    
+
 }
