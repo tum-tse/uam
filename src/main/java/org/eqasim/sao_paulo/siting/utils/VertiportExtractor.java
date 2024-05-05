@@ -45,8 +45,8 @@ public class VertiportExtractor {
                     String[] values = line.split(",");
                     int stationId = Integer.parseInt(values[0]);
                     if (vertiportIds.contains(stationId)) {
-                        double x = Double.parseDouble(values[2]); // x coordinate
-                        double y = Double.parseDouble(values[3]); // y coordinate
+                        double x = Double.parseDouble(values[1]); // x coordinate
+                        double y = Double.parseDouble(values[2]); // y coordinate
                         matchedData.add(new double[]{stationId, x, y}); // Include stationId
                     }
                 } catch (NumberFormatException | ArrayIndexOutOfBoundsException e) {
