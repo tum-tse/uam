@@ -5,8 +5,10 @@ import java.nio.file.*;
 import java.util.*;
 
 public class TripProcessor {
-    private static final double POOLING_TIME_WINDOW = 2*60; // 5 minutes converted to seconds
+    private static final double POOLING_TIME_WINDOW = 2 * 60; // 2 minutes converted to seconds
     private static final double SEARCH_RADIUS = 1000; // Radius in meters for nearby station search
+    private static final int UAM_CAPACITY = 4; // Maximum number of seats in a UAM vehicle
+    private static final double WALKING_SPEED = 1.4; // Walking speed in meters per second
 
     public static void main(String[] args) throws IOException {
         // Define the paths to your data files
@@ -114,15 +116,16 @@ public class TripProcessor {
     }
 
     private static void calculatePoolingStatistics(List<UAMTrip> trips, double timeWindow, Map<Integer, Station> stations) {
-        Map<String, List<UAMTrip>> groupedTrips = new HashMap<>();
+        Map<String, List<UAMTrip>> potentialGroups = new HashMap<>();
         for (UAMTrip trip : trips) {
+            trip.calculateWalkingTime(stations); // Calculate walking time to station
             for (UAMTrip otherTrip : trips) {
                 if (trip != otherTrip && areStationsNearby(trip.origStation, otherTrip.origStation, stations) &&
                         areStationsNearby(trip.destStation, otherTrip.destStation, stations) &&
                         Math.abs(trip.departureTime - otherTrip.departureTime) <= timeWindow) {
 
                     String key = trip.origStation + "_" + trip.destStation;
-                    groupedTrips.computeIfAbsent(key, k -> new ArrayList<>()).add(trip);
+                    potentialGroups.computeIfAbsent(key, k -> new ArrayList<>()).add(trip);
                     break; // Ensure that each trip is only added once per eligible grouping
                 }
             }
@@ -132,11 +135,13 @@ public class TripProcessor {
         double savedDistance = 0.0;
         double totalIncreasedWaitTime = 0.0;
 
-        for (List<UAMTrip> group : groupedTrips.values()) {
+        for (List<UAMTrip> group : potentialGroups.values()) {
             if (group.size() > 1) {
-                group.sort(Comparator.comparingDouble(t -> t.departureTime));
+                group.sort(Comparator.comparingDouble(t -> t.walkingTimeToStation)); // Sort by walking time to station
+
+                int groupSize = Math.min(group.size(), UAM_CAPACITY); // Limit group size by UAM capacity
                 UAMTrip baseTrip = group.get(0);
-                for (int i = 1; i < group.size(); i++) {
+                for (int i = 1; i < groupSize; i++) {
                     UAMTrip pooledTrip = group.get(i);
                     savedDistance += baseTrip.flightDistance;
                     pooledTrips++;
@@ -165,6 +170,7 @@ public class TripProcessor {
         double originX, originY, destX, destY, departureTime, flightDistance;
         Integer origStation, destStation; // Changed to Integer to handle null values
         String purpose, income;
+        double walkingTimeToStation; // Time to walk to the station
 
         UAMTrip(String tripId, double originX, double originY, double destX, double destY, double departureTime, double flightDistance, Integer origStation, Integer destStation, String purpose, String income) {
             this.tripId = tripId;
@@ -178,6 +184,16 @@ public class TripProcessor {
             this.destStation = destStation;
             this.purpose = purpose;
             this.income = income;
+        }
+
+        void calculateWalkingTime(Map<Integer, Station> stations) {
+            if (stations.containsKey(origStation)) {
+                Station station = stations.get(origStation);
+                double distance = Math.sqrt(Math.pow(originX - station.x, 2) + Math.pow(originY - station.y, 2));
+                walkingTimeToStation = distance / WALKING_SPEED;
+            } else {
+                walkingTimeToStation = Double.MAX_VALUE; // Effectively prevents this trip from being pooled if no station info
+            }
         }
     }
 
