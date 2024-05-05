@@ -4,6 +4,19 @@ import java.io.*;
 import java.nio.file.*;
 import java.util.*;
 
+import java.util.Collection;
+import java.util.Map;
+
+import net.bhl.matsim.uam.infrastructure.UAMStation;
+import net.bhl.matsim.uam.infrastructure.readers.UAMXMLReader;
+import org.matsim.api.core.v01.Coord;
+import org.matsim.api.core.v01.Id;
+import org.matsim.api.core.v01.network.Link;
+import org.matsim.api.core.v01.network.Network;
+import org.matsim.core.network.NetworkUtils;
+import org.matsim.core.utils.collections.QuadTree;
+import org.matsim.core.network.io.MatsimNetworkReader;
+
 public class TripPooling {
     private static final double SEARCH_RADIUS = 1000; // Radius in meters for nearby station search
     private static final int UAM_CAPACITY = 4; // Maximum number of seats in a UAM vehicle
@@ -11,19 +24,23 @@ public class TripPooling {
 
     public static void main(String[] args) throws IOException {
         // minutes converted to seconds
-        double POOLING_TIME_WINDOW = 2 * 60;
+        double POOLING_TIME_WINDOW = 5 * 60;
 
         // Define the paths to your data files
         Path selectedTripsPath = Paths.get("src/main/java/org/eqasim/sao_paulo/siting/selected_trips.csv");
         Path allTripsPath = Paths.get("scenarios/1-percent/UpdatedFinalTrips.csv");
         Path uamTripsPath = Paths.get("scenarios/1-percent/UAMTravelTimes.csv");
-        Path stationsPath = Paths.get("src/main/java/org/eqasim/sao_paulo/siting/utils/Vertiports.csv");
+        String stationsPath = "scenarios/1-percent/uam-scenario/uam_vehicles.xml.gz";
+        String networkPath = "scenarios/1-percent/uam-scenario/uam_network.xml.gz";
         String pooledTripsPath = "src/main/java/org/eqasim/sao_paulo/siting/output_pooled_trips.csv";
 
         // Read and process the data
         Map<String, Double> selectedTrips = readSelectedTrips(selectedTripsPath);
         Map<String, String[]> filteredTrips = filterTrips(allTripsPath, selectedTrips);
-        Map<Integer, Station> stations = readStations(stationsPath);
+        Network network = NetworkUtils.createNetwork();
+        MatsimNetworkReader reader = new MatsimNetworkReader(network);
+        reader.readFile(networkPath);
+        Map<Integer, Station> stations = readStations(stationsPath, network);
         List<UAMTrip> uamTrips = readUAMTrips(uamTripsPath, filteredTrips, stations);
 
         List<List<UAMTrip>> pooledGroups = poolTrips(uamTrips, POOLING_TIME_WINDOW, stations);
@@ -58,19 +75,19 @@ public class TripPooling {
         return filteredTrips;
     }
 
-    private static Map<Integer, Station> readStations(Path filePath) throws IOException {
-        Map<Integer, Station> stations = new HashMap<>();
-        try (BufferedReader reader = Files.newBufferedReader(filePath)) {
-            String line = reader.readLine(); // Skip header
-            while ((line = reader.readLine()) != null) {
-                String[] parts = line.split(",");
-                int stationId = Integer.parseInt(parts[0]);
-                double x = Double.parseDouble(parts[2]);
-                double y = Double.parseDouble(parts[3]);
-                stations.put(stationId, new Station(stationId, x, y));
-            }
+    private static Map<Integer, Station> readStations(String filePath, Network network) throws IOException {
+        UAMXMLReader uamReader = new UAMXMLReader(network);
+        uamReader.readFile(filePath); // Assuming the file is locally accessible and this function handles it
+        Map<Integer, Station> stationMap = new HashMap<>();
+
+        for (Map.Entry<Id<UAMStation>, UAMStation> entry : uamReader.getStations().entrySet()) {
+            UAMStation uamStation = entry.getValue();
+            Link locationLink = uamStation.getLocationLink();
+            Station station = new Station(entry.getKey().toString(), locationLink.getCoord().getX(), locationLink.getCoord().getY());
+            stationMap.put(Integer.parseInt(entry.getKey().toString()), station);
         }
-        return stations;
+
+        return stationMap;
     }
 
     private static List<UAMTrip> readUAMTrips(Path filePath, Map<String, String[]> filteredTrips, Map<Integer, Station> stations) throws IOException {
@@ -217,6 +234,7 @@ public class TripPooling {
             this.income = income;
         }
 
+        // TODO: Use MATSim to calculate the routes and travel times
         void calculateWalkingTime(Map<Integer, Station> stations) {
             if (stations.containsKey(origStation)) {
                 Station station = stations.get(origStation);
@@ -232,10 +250,11 @@ public class TripPooling {
         int id;
         double x, y;
 
-        Station(int id, double x, double y) {
-            this.id = id;
+        Station(String id, double x, double y) {
+            this.id = Integer.parseInt(id);
             this.x = x;
             this.y = y;
         }
     }
+    
 }
