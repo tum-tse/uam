@@ -5,12 +5,14 @@ import java.nio.file.*;
 import java.util.*;
 
 public class TripPooling {
-    private static final double POOLING_TIME_WINDOW = 2 * 60; // 2 minutes converted to seconds
     private static final double SEARCH_RADIUS = 1000; // Radius in meters for nearby station search
     private static final int UAM_CAPACITY = 4; // Maximum number of seats in a UAM vehicle
     private static final double WALKING_SPEED = 1.4; // Walking speed in meters per second
 
     public static void main(String[] args) throws IOException {
+        // minutes converted to seconds
+        double POOLING_TIME_WINDOW = 2 * 60;
+
         // Define the paths to your data files
         Path selectedTripsPath = Paths.get("src/main/java/org/eqasim/sao_paulo/siting/selected_trips.csv");
         Path allTripsPath = Paths.get("scenarios/1-percent/UpdatedFinalTrips.csv");
@@ -62,7 +64,7 @@ public class TripPooling {
             String line = reader.readLine(); // Skip header
             while ((line = reader.readLine()) != null) {
                 String[] parts = line.split(",");
-                Integer stationId = Integer.parseInt(parts[0]);
+                int stationId = Integer.parseInt(parts[0]);
                 double x = Double.parseDouble(parts[2]);
                 double y = Double.parseDouble(parts[3]);
                 stations.put(stationId, new Station(stationId, x, y));
