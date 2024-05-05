@@ -4,7 +4,7 @@ import java.io.*;
 import java.nio.file.*;
 import java.util.*;
 
-public class TripProcessor {
+public class TripPooling {
     private static final double POOLING_TIME_WINDOW = 2 * 60; // 2 minutes converted to seconds
     private static final double SEARCH_RADIUS = 1000; // Radius in meters for nearby station search
     private static final int UAM_CAPACITY = 4; // Maximum number of seats in a UAM vehicle
@@ -16,6 +16,7 @@ public class TripProcessor {
         Path allTripsPath = Paths.get("scenarios/1-percent/UpdatedFinalTrips.csv");
         Path uamTripsPath = Paths.get("scenarios/1-percent/UAMTravelTimes.csv");
         Path stationsPath = Paths.get("src/main/java/org/eqasim/sao_paulo/siting/utils/Vertiports.csv");
+        String pooledTripsPath = "src/main/java/org/eqasim/sao_paulo/siting/output_pooled_trips.csv";
 
         // Read and process the data
         Map<String, Double> selectedTrips = readSelectedTrips(selectedTripsPath);
@@ -23,8 +24,10 @@ public class TripProcessor {
         Map<Integer, Station> stations = readStations(stationsPath);
         List<UAMTrip> uamTrips = readUAMTrips(uamTripsPath, filteredTrips, stations);
 
+        List<List<UAMTrip>> pooledGroups = poolTrips(uamTrips, POOLING_TIME_WINDOW, stations);
         // Calculate and print pooling statistics
-        calculatePoolingStatistics(uamTrips, POOLING_TIME_WINDOW, stations);
+        printPoolingStatistics(pooledGroups);
+        writePoolingResultsToCSV(pooledGroups, pooledTripsPath);
     }
 
     private static Map<String, Double> readSelectedTrips(Path filePath) throws IOException {
@@ -115,7 +118,7 @@ public class TripProcessor {
         }
     }
 
-    private static void calculatePoolingStatistics(List<UAMTrip> trips, double timeWindow, Map<Integer, Station> stations) {
+    private static List<List<UAMTrip>> poolTrips(List<UAMTrip> trips, double timeWindow, Map<Integer, Station> stations) {
         Map<String, List<UAMTrip>> potentialGroups = new HashMap<>();
         for (UAMTrip trip : trips) {
             trip.calculateWalkingTime(stations); // Calculate walking time to station
@@ -131,14 +134,24 @@ public class TripProcessor {
             }
         }
 
+        return new ArrayList<>(potentialGroups.values());
+    }
+    private static boolean areStationsNearby(int stationId1, int stationId2, Map<Integer, Station> stations) {
+        Station s1 = stations.get(stationId1);
+        Station s2 = stations.get(stationId2);
+        // TODO: Use MATSim to calculate the distance
+        double distance = Math.sqrt(Math.pow(s1.x - s2.x, 2) + Math.pow(s1.y - s2.y, 2));
+        return distance <= SEARCH_RADIUS;
+    }
+
+    private static void printPoolingStatistics(List<List<UAMTrip>> pooledGroups) {
         int pooledTrips = 0;
         double savedDistance = 0.0;
         double totalIncreasedWaitTime = 0.0;
 
-        for (List<UAMTrip> group : potentialGroups.values()) {
+        for (List<UAMTrip> group : pooledGroups) {
             if (group.size() > 1) {
                 group.sort(Comparator.comparingDouble(t -> t.walkingTimeToStation)); // Sort by walking time to station
-
                 int groupSize = Math.min(group.size(), UAM_CAPACITY); // Limit group size by UAM capacity
                 UAMTrip baseTrip = group.get(0);
                 for (int i = 1; i < groupSize; i++) {
@@ -151,18 +164,34 @@ public class TripProcessor {
         }
 
         double averageIncreasedWaitTime = pooledTrips > 0 ? totalIncreasedWaitTime / pooledTrips : 0.0;
-
         System.out.println("Number of pooled trips: " + pooledTrips);
         System.out.println("Saved flight distance: " + savedDistance);
         System.out.println("Average increased wait time (seconds): " + averageIncreasedWaitTime);
     }
 
-    private static boolean areStationsNearby(int stationId1, int stationId2, Map<Integer, Station> stations) {
-        Station s1 = stations.get(stationId1);
-        Station s2 = stations.get(stationId2);
-        // TODO: Use MATSim to calculate the distance
-        double distance = Math.sqrt(Math.pow(s1.x - s2.x, 2) + Math.pow(s1.y - s2.y, 2));
-        return distance <= SEARCH_RADIUS;
+    private static void writePoolingResultsToCSV(List<List<UAMTrip>> pooledGroups, String filePath) {
+        try (PrintWriter pw = new PrintWriter(new File(filePath))) {
+            pw.println("Group ID,Trip ID,Origin Station ID,Destination Station ID,Departure Time,Arrival Time at Station,Purpose,Income,Walking Time to Station,Total Trips in Group");
+            int groupID = 1;
+            for (List<UAMTrip> group : pooledGroups) {
+                for (UAMTrip trip : group) {
+                    pw.println(String.format("%d,%s,%d,%d,%f,%f,%s,%s,%f,%d",
+                            groupID,
+                            trip.tripId,
+                            trip.origStation,
+                            trip.destStation,
+                            trip.departureTime,
+                            trip.departureTime - trip.walkingTimeToStation, // Arrival time at station
+                            trip.purpose,
+                            trip.income,
+                            trip.walkingTimeToStation,
+                            group.size()));
+                }
+                groupID++;
+            }
+        } catch (FileNotFoundException e) {
+            System.err.println("Error writing to CSV file: " + e.getMessage());
+        }
     }
 
     static class UAMTrip {
