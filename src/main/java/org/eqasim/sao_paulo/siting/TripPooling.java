@@ -34,13 +34,11 @@ public class TripPooling {
         String networkPath = "scenarios/1-percent/uam-scenario/uam_network.xml.gz";
         String pooledTripsPath = "src/main/java/org/eqasim/sao_paulo/siting/output_pooled_trips.csv";
 
-        // Read and process the data
+        Network network = NetworkUtils.createNetwork();
+        new MatsimNetworkReader(network).readFile(networkPath);
+        Map<Integer, Station> stations = readStations(stationsPath, network);
         Map<String, Double> selectedTrips = readSelectedTrips(selectedTripsPath);
         Map<String, String[]> filteredTrips = filterTrips(allTripsPath, selectedTrips);
-        Network network = NetworkUtils.createNetwork();
-        MatsimNetworkReader reader = new MatsimNetworkReader(network);
-        reader.readFile(networkPath);
-        Map<Integer, Station> stations = readStations(stationsPath, network);
         List<UAMTrip> uamTrips = readUAMTrips(uamTripsPath, filteredTrips, stations);
 
         List<List<UAMTrip>> pooledGroups = poolTrips(uamTrips, POOLING_TIME_WINDOW, stations);
@@ -148,12 +146,23 @@ public class TripPooling {
 
                     String key = trip.origStation + "_" + trip.destStation;
                     potentialGroups.computeIfAbsent(key, k -> new ArrayList<>()).add(trip);
-                    break; // Ensure that each trip is only added once per eligible grouping
+                    // Ensure that each trip is only added once per eligible grouping
+                    break; // TODO: need to pool the trips optimally instead of this!
                 }
             }
         }
 
-        return new ArrayList<>(potentialGroups.values());
+        // Limit each group to the capacity of the UAM vehicle
+        List<List<UAMTrip>> finalGroups = new ArrayList<>();
+        for (List<UAMTrip> group : potentialGroups.values()) {
+            if (group.size() > UAM_CAPACITY) {
+                group.sort(Comparator.comparingDouble(t -> t.walkingTimeToStation)); // Prioritize by earliest walking time
+                finalGroups.add(new ArrayList<>(group.subList(0, UAM_CAPACITY)));
+            } else {
+                finalGroups.add(group);
+            }
+        }
+        return finalGroups;
     }
     private static boolean areStationsNearby(int stationId1, int stationId2, Map<Integer, Station> stations) {
         Station s1 = stations.get(stationId1);
@@ -169,12 +178,9 @@ public class TripPooling {
         double totalIncreasedWaitTime = 0.0;
 
         for (List<UAMTrip> group : pooledGroups) {
-            if (group.size() > 1) {
-                group.sort(Comparator.comparingDouble(t -> t.walkingTimeToStation)); // Sort by walking time to station
-                int groupSize = Math.min(group.size(), UAM_CAPACITY); // Limit group size by UAM capacity
-                UAMTrip baseTrip = group.get(0);
-                for (int i = 1; i < groupSize; i++) {
-                    UAMTrip pooledTrip = group.get(i);
+            UAMTrip baseTrip = group.get(0);
+            for (UAMTrip pooledTrip : group) {
+                if (!pooledTrip.equals(baseTrip)) {
                     savedDistance += baseTrip.flightDistance;
                     pooledTrips++;
                     totalIncreasedWaitTime += (pooledTrip.departureTime - baseTrip.departureTime);
@@ -188,7 +194,7 @@ public class TripPooling {
         System.out.println("Average increased wait time (seconds): " + averageIncreasedWaitTime);
     }
 
-    private static void writePoolingResultsToCSV(List<List<UAMTrip>> pooledGroups, String filePath) {
+    private static void writePoolingResultsToCSV(List<List<UAMTrip>> pooledGroups, String filePath) throws FileNotFoundException {
         try (PrintWriter pw = new PrintWriter(new File(filePath))) {
             pw.println("Group ID,Trip ID,Origin Station ID,Destination Station ID,Departure Time,Arrival Time at Station,Purpose,Income,Walking Time to Station,Total Trips in Group");
             int groupID = 1;
@@ -208,8 +214,6 @@ public class TripPooling {
                 }
                 groupID++;
             }
-        } catch (FileNotFoundException e) {
-            System.err.println("Error writing to CSV file: " + e.getMessage());
         }
     }
 
