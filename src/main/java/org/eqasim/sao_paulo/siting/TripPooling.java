@@ -20,7 +20,7 @@ import org.matsim.core.network.io.MatsimNetworkReader;
 public class TripPooling {
     private static final double SEARCH_RADIUS = 1000; // Radius in meters for nearby station search
     private static final int UAM_CAPACITY = 4; // Maximum number of seats in a UAM vehicle
-    private static final double WALKING_SPEED = 1.4; // Walking speed in meters per second
+    private static final double Teleportation_SPEED = 30/3.6; // Walking speed in meters per second
 
     public static void main(String[] args) throws IOException {
         // minutes converted to seconds
@@ -142,7 +142,7 @@ public class TripPooling {
                 if (trip != otherTrip && areStationsNearby(trip.origStation, otherTrip.origStation, stations) &&
                         areStationsNearby(trip.destStation, otherTrip.destStation, stations) &&
                         Math.abs(trip.departureTime - otherTrip.departureTime) <= timeWindow) {
-                    trip.calculateWalkingTime(otherTrip.origStation); // Calculate walking time to station
+                    trip.calculateTeleportationTime(otherTrip.origStation); // Calculate walking time to station
 
                     String key = trip.origStation + "_" + trip.destStation;
                     potentialGroups.computeIfAbsent(key, k -> new ArrayList<>()).add(trip);
@@ -237,9 +237,9 @@ public class TripPooling {
         }
 
         // TODO: Use MATSim to calculate the routes and travel times
-        void calculateWalkingTime(Station station) {
+        void calculateTeleportationTime(Station station) {
             double distance = Math.sqrt(Math.pow(originX - station.x, 2) + Math.pow(originY - station.y, 2));
-            walkingTimeToPooledStation = distance / WALKING_SPEED;
+            walkingTimeToPooledStation = distance / Teleportation_SPEED;
         }
     }
 
