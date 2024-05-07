@@ -7,9 +7,10 @@ import org.matsim.core.config.ConfigUtils;
 import org.matsim.core.population.io.PopulationReader;
 import org.matsim.core.scenario.ScenarioUtils;
 import org.matsim.core.utils.io.IOUtils;
-
+import org.matsim.core.router.TripStructureUtils; // Import the TripStructureUtils
 import java.io.BufferedWriter;
 import java.io.IOException;
+import java.util.List;
 
 public class PopulationToTrips {
     public static void main(String[] args) {
@@ -19,35 +20,30 @@ public class PopulationToTrips {
         // Setup MATSim configuration and scenario
         Config config = ConfigUtils.createConfig();
         Scenario scenario = ScenarioUtils.createScenario(config);
-        PopulationReader reader = new PopulationReader(scenario);
-        reader.readFile(inputPopulationFile);
+        new PopulationReader(scenario).readFile(inputPopulationFile);
 
         try (BufferedWriter writer = IOUtils.getBufferedWriter(outputCsvFile)) {
-            // Write CSV header
-            writer.write("trip_id,originX,originY,destinationX,destinationY,start_time,trip_purpose\n"); //,travel_time_pt,distance_pt,in_vehicle_time_pt,waiting_time_pt,travel_time_car,distance_car,purpose,car_cost,pt_cost,car_utility,pt_utility,uam_utility_fix,car_generalized_cost,pt_generalized_cost,income
+            writer.write("trip_id,originX,originY,destinationX,destinationY,start_time,trip_purpose\n");
 
             for (Person person : scenario.getPopulation().getPersons().values()) {
                 Plan plan = person.getSelectedPlan();
                 if (plan != null) {
-                    // Assuming the plan has at least two activities (like home-work-home)
                     int trip_id = 0;
-                    for (int i = 0; i < plan.getPlanElements().size() - 1; i++) {
-                        PlanElement pe = plan.getPlanElements().get(i);
-                        if (pe instanceof Activity) {
-                            trip_id++;
-                            Activity origin = (Activity) pe;
-                            Leg leg = (Leg) plan.getPlanElements().get(i + 1);
-                            Activity destination = (Activity) plan.getPlanElements().get(i + 2);
+                    List<TripStructureUtils.Trip> trips = TripStructureUtils.getTrips(plan);
+                    for (TripStructureUtils.Trip trip : trips) {
+                        trip_id++;
+                        Activity origin = trip.getOriginActivity();
+                        Activity destination = trip.getDestinationActivity();
+                        //Leg leg = trip.getLegsOnly().get(0);
+                        double departureTime = TripStructureUtils.getDepartureTime(trip).seconds();
 
-                            // Write data to CSV
-                            writer.write(person.getId().toString()+"@"+trip_id + "," +
-                                    origin.getCoord().getX() + "," +
-                                    origin.getCoord().getY() + "," +
-                                    destination.getCoord().getX() + "," +
-                                    destination.getCoord().getY() + "," +
-                                    leg.getDepartureTime().seconds() + "," +
-                                    destination.getType() + "\n");
-                        }
+                        writer.write(person.getId().toString() + "@" + trip_id + "," +
+                                origin.getCoord().getX() + "," +
+                                origin.getCoord().getY() + "," +
+                                destination.getCoord().getX() + "," +
+                                destination.getCoord().getY() + "," +
+                                departureTime + "," +
+                                destination.getType() + "\n");
                     }
                 }
             }
