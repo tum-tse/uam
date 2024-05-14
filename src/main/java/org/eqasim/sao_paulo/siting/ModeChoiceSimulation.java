@@ -76,9 +76,13 @@ public class ModeChoiceSimulation {
     }
 
     private static String predictModeChoice(Trip trip, Random random) {
-        double totalUtility = trip.carUtility + trip.ptUtility + trip.uamUtility;
-        double carProbability = trip.carUtility / totalUtility;
-        double ptProbability = trip.ptUtility / totalUtility;
+        double expCarUtility = Math.exp(trip.carUtility);
+        double expPtUtility = Math.exp(trip.ptUtility);
+        double expUamUtility = Math.exp(trip.uamUtility);
+        double totalUtility = expCarUtility + expPtUtility + expUamUtility;
+
+        double carProbability = expCarUtility / totalUtility;
+        double ptProbability = expPtUtility / totalUtility;
         double randomValue = random.nextDouble();
 
         if (randomValue < carProbability) {
