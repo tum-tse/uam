@@ -65,7 +65,7 @@ public class UAMVertiportsInitialization {
 
         // Save clusters to CSV
         try {
-            //saveClustersAsCSV(kmeans.centroids, "src/main/java/org/eqasim/sao_paulo/siting/initialization/stations.csv", defaultCSVValues);
+            saveClustersAsCSV(kmeans.centroids, "src/main/java/org/eqasim/sao_paulo/siting/initialization/stations.csv", defaultCSVValues);
             saveClustersAsCSVForOptimization(kmeans.centroids, "src/main/java/org/eqasim/sao_paulo/siting/initialization/Vertiports.csv");
         } catch (IOException e) {
             System.err.println("Error while saving CSV: " + e.getMessage());
@@ -93,7 +93,7 @@ public class UAMVertiportsInitialization {
         FileWriter csvWriter = new FileWriter(filePath);
 
         // Write header
-        csvWriter.append("vertiportID, vertiportX, vertiportY, ConstructionCost\n");
+        csvWriter.append("vertiportID, vertiportX, vertiportY, Capacity\n");
 
         // Write centroids data
         for (int i = 0; i < centroids.length; i++) {
