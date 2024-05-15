@@ -250,9 +250,9 @@ public class Utils {
             this.stations = uamReader.getStations();
             this.vehicles = uamReader.getVehicles();
 
-            this.selectedTrips = Utils.readSelectedTrips(selectedTripsPath);
-            this.filteredTrips = Utils.filterTrips(allTripsPath, selectedTrips);
-            this.uamTrips = Utils.readUAMTrips(uamTripsPath, filteredTrips, stations);
+            this.selectedTrips = readSelectedTrips(selectedTripsPath);
+            this.filteredTrips = filterTrips(allTripsPath, selectedTrips);
+            this.uamTrips = readUAMTrips(uamTripsPath, filteredTrips, stations);
         }
 
         public List<UAMTrip> getUamTrips() {
