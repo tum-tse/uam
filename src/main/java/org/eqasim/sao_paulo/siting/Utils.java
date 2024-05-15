@@ -8,6 +8,8 @@ import java.util.Map;
 
 import net.bhl.matsim.uam.infrastructure.UAMStation;
 import net.bhl.matsim.uam.infrastructure.readers.UAMXMLReader;
+import net.bhl.matsim.uam.infrastructure.UAMVehicle;
+import org.matsim.contrib.dvrp.fleet.DvrpVehicle;
 import org.matsim.api.core.v01.Id;
 import org.matsim.api.core.v01.network.Network;
 import org.matsim.core.network.NetworkUtils;
@@ -61,12 +63,6 @@ public class Utils {
         return filteredTrips;
     }
 
-    private static Map<Id<UAMStation>, UAMStation> readStations(String filePath, Network network) throws IOException {
-        UAMXMLReader uamReader = new UAMXMLReader(network);
-        uamReader.readFile(filePath);
-        return uamReader.getStations();
-    }
-
     private static List<UAMTrip> readUAMTrips(Path filePath, Map<String, String[]> filteredTrips, Map<Id<UAMStation>, UAMStation> stations) throws IOException {
         List<UAMTrip> trips = new ArrayList<>();
         try (BufferedReader reader = Files.newBufferedReader(filePath)) {
@@ -107,7 +103,6 @@ public class Utils {
         }
         return trips;
     }
-
     private static String parseStationId(String stationId) {
         try {
             return (stationId != null) && (!stationId.isEmpty()) && (!stationId.equalsIgnoreCase("null")) ? stationId : NULL_VERTIPORT;
@@ -228,11 +223,12 @@ public class Utils {
         private final Path selectedTripsPath;
         private final Path allTripsPath;
         private final Path uamTripsPath;
-        private final String stationsPath;
+        private final String stationsAndVehiclesPath;
         private final String networkPath;
 
         private Network network;
         private Map<Id<UAMStation>, UAMStation> stations;
+        private Map<Id<DvrpVehicle>, UAMVehicle> vehicles;
         private Map<String, Double> selectedTrips;
         private Map<String, String[]> filteredTrips;
         private List<UAMTrip> uamTrips;
@@ -241,14 +237,19 @@ public class Utils {
             this.selectedTripsPath = Paths.get("src/main/java/org/eqasim/sao_paulo/siting/selected_trips.csv");
             this.allTripsPath = Paths.get("scenarios/1-percent/UpdatedFinalTrips.csv");
             this.uamTripsPath = Paths.get("scenarios/1-percent/UAMTravelTimes.csv");
-            this.stationsPath = "scenarios/1-percent/uam-scenario/uam_vehicles.xml.gz";
+            this.stationsAndVehiclesPath = "scenarios/1-percent/uam-scenario/uam_vehicles.xml.gz";
             this.networkPath = "scenarios/1-percent/uam-scenario/uam_network.xml.gz";
         }
 
         public void loadAllData() throws IOException {
             this.network = NetworkUtils.createNetwork();
             new MatsimNetworkReader(network).readFile(networkPath);
-            this.stations = Utils.readStations(stationsPath, network);
+
+            UAMXMLReader uamReader = new UAMXMLReader(network);
+            uamReader.readFile(stationsAndVehiclesPath);
+            this.stations = uamReader.getStations();
+            this.vehicles = uamReader.getVehicles();
+
             this.selectedTrips = Utils.readSelectedTrips(selectedTripsPath);
             this.filteredTrips = Utils.filterTrips(allTripsPath, selectedTrips);
             this.uamTrips = Utils.readUAMTrips(uamTripsPath, filteredTrips, stations);
