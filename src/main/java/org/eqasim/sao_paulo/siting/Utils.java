@@ -9,7 +9,6 @@ import java.util.Map;
 import net.bhl.matsim.uam.infrastructure.UAMStation;
 import net.bhl.matsim.uam.infrastructure.readers.UAMXMLReader;
 import org.matsim.api.core.v01.Id;
-import org.matsim.api.core.v01.network.Link;
 import org.matsim.api.core.v01.network.Network;
 import org.matsim.core.network.NetworkUtils;
 import org.matsim.core.network.io.MatsimNetworkReader;
@@ -17,7 +16,9 @@ import org.matsim.core.network.io.MatsimNetworkReader;
 public class Utils {
     private static final double SEARCH_RADIUS = 1000; // Radius in meters for nearby station search
     private static final int UAM_CAPACITY = 4; // Maximum number of seats in a UAM vehicle
-    private static final double Teleportation_SPEED = 20/3.6; // Walking speed in meters per second
+    private static final double TELEPORTATION_SPEED = 20/3.6; // Walking speed in meters per second
+
+    private static final String NULL_VERTIPORT = "NULL_Vertiport";
 
     public static void main(String[] args) throws IOException {
         DataLoader dataLoader = new DataLoader();
@@ -28,7 +29,7 @@ public class Utils {
         // Define the paths to your data files
         String pooledTripsPath = "src/main/java/org/eqasim/sao_paulo/siting/output_pooled_trips.csv";
 
-        List<List<UAMTrip>> pooledGroups = poolTrips(dataLoader.uamTrips, POOLING_TIME_WINDOW, dataLoader.stations);
+        List<List<UAMTrip>> pooledGroups = poolTrips(dataLoader.uamTrips, POOLING_TIME_WINDOW);
         // Calculate and print pooling statistics
         printPoolingStatistics(pooledGroups);
         writePoolingResultsToCSV(pooledGroups, pooledTripsPath);
@@ -60,22 +61,13 @@ public class Utils {
         return filteredTrips;
     }
 
-    private static Map<Integer, Station> readStations(String filePath, Network network) throws IOException {
+    private static Map<Id<UAMStation>, UAMStation> readStations(String filePath, Network network) throws IOException {
         UAMXMLReader uamReader = new UAMXMLReader(network);
-        uamReader.readFile(filePath); // Assuming the file is locally accessible and this function handles it
-        Map<Integer, Station> stationMap = new HashMap<>();
-
-        for (Map.Entry<Id<UAMStation>, UAMStation> entry : uamReader.getStations().entrySet()) {
-            UAMStation uamStation = entry.getValue();
-            Link locationLink = uamStation.getLocationLink();
-            Station station = new Station(entry.getKey().toString(), locationLink.getCoord().getX(), locationLink.getCoord().getY());
-            stationMap.put(Integer.parseInt(entry.getKey().toString()), station);
-        }
-
-        return stationMap;
+        uamReader.readFile(filePath);
+        return uamReader.getStations();
     }
 
-    private static List<UAMTrip> readUAMTrips(Path filePath, Map<String, String[]> filteredTrips, Map<Integer, Station> stations) throws IOException {
+    private static List<UAMTrip> readUAMTrips(Path filePath, Map<String, String[]> filteredTrips, Map<Id<UAMStation>, UAMStation> stations) throws IOException {
         List<UAMTrip> trips = new ArrayList<>();
         try (BufferedReader reader = Files.newBufferedReader(filePath)) {
             String line = reader.readLine(); // Skip header
@@ -83,14 +75,16 @@ public class Utils {
                 String[] parts = line.split(",");
                 if (filteredTrips.containsKey(parts[0])) {
                     String[] tripDetails = filteredTrips.get(parts[0]);
-                    Integer origStation = parseStationId(parts[12]);
-                    Integer destStation = parseStationId(parts[13]);
-
-                    if (origStation == null || destStation == null) {
-                        continue; // Skip trips where station IDs are null
+                    String origStationStringId = parseStationId(parts[12]);
+                    String destStationStringId = parseStationId(parts[13]);
+                    if (origStationStringId.equals(NULL_VERTIPORT) | origStationStringId.equals(NULL_VERTIPORT)) {
+                        continue; // Skip trips where station IDs are NULL_VERTIPORT
                     }
+
+                    Id<UAMStation> origStationId = Id.create(Objects.requireNonNull(origStationStringId), UAMStation.class);
+                    Id<UAMStation> destStationId = Id.create(Objects.requireNonNull(destStationStringId), UAMStation.class);
                     // Or skip trips where station IDs are not in the stations map
-                    if (!stations.containsKey(origStation) || !stations.containsKey(destStation)){
+                    if (!stations.containsKey(origStationId) || !stations.containsKey(destStationId)){
                         System.err.println("We have trips using the vertiports not defined in the vertiport.csv!");
                     }
 
@@ -102,8 +96,8 @@ public class Utils {
                             Double.parseDouble(parts[4]),
                             Double.parseDouble(parts[5]),
                             Double.parseDouble(parts[17]),
-                            stations.get(origStation),
-                            stations.get(destStation),
+                            stations.get(origStationId),
+                            stations.get(destStationId),
                             tripDetails[12], // purpose
                             tripDetails[20]  // income
                     );
@@ -114,20 +108,20 @@ public class Utils {
         return trips;
     }
 
-    private static Integer parseStationId(String stationId) {
+    private static String parseStationId(String stationId) {
         try {
-            return stationId != null && !stationId.isEmpty() && !stationId.equalsIgnoreCase("null") ? Integer.valueOf(stationId) : null;
+            return (stationId != null) && (!stationId.isEmpty()) && (!stationId.equalsIgnoreCase("null")) ? stationId : NULL_VERTIPORT;
         } catch (NumberFormatException e) {
             return null; // Return null if conversion fails
         }
     }
 
-    private static List<List<UAMTrip>> poolTrips(List<UAMTrip> trips, double timeWindow, Map<Integer, Station> stations) {
+    private static List<List<UAMTrip>> poolTrips(List<UAMTrip> trips, double timeWindow) {
         Map<String, List<UAMTrip>> potentialGroups = new HashMap<>();
         for (UAMTrip trip : trips) {
             for (UAMTrip otherTrip : trips) {
-                if (trip != otherTrip && areStationsNearby(trip.origStation, otherTrip.origStation, stations) &&
-                        areStationsNearby(trip.destStation, otherTrip.destStation, stations) &&
+                if (trip != otherTrip && areStationsNearby(trip.origStation, otherTrip.origStation) &&
+                        areStationsNearby(trip.destStation, otherTrip.destStation) &&
                         Math.abs(trip.departureTime - otherTrip.departureTime) <= timeWindow) {
                     trip.calculateTeleportationTime(otherTrip.origStation); // Calculate walking time to station
 
@@ -151,9 +145,9 @@ public class Utils {
         }
         return finalGroups;
     }
-    private static boolean areStationsNearby(Station stationId1, Station stationId2, Map<Integer, Station> stations) {
+    private static boolean areStationsNearby(UAMStation stationId1, UAMStation stationId2) {
         // TODO: Use MATSim to calculate the distance
-        double distance = Math.sqrt(Math.pow(stationId1.x - stationId2.x, 2) + Math.pow(stationId1.y - stationId2.y, 2));
+        double distance = Math.sqrt(Math.pow(stationId1.getLocationLink().getCoord().getX() - stationId2.getLocationLink().getCoord().getX(), 2) + Math.pow(stationId1.getLocationLink().getCoord().getY() - stationId2.getLocationLink().getCoord().getY(), 2));
         return distance <= SEARCH_RADIUS;
     }
 
@@ -185,11 +179,11 @@ public class Utils {
             int groupID = 1;
             for (List<UAMTrip> group : pooledGroups) {
                 for (UAMTrip trip : group) {
-                    pw.println(String.format("%d,%s,%d,%d,%f,%f,%s,%s,%f,%d",
+                    pw.println(String.format("%d,%s,%s,%s,%f,%f,%s,%s,%f,%d",
                             groupID,
                             trip.tripId,
-                            trip.origStation.id,
-                            trip.destStation.id,
+                            trip.origStation.getId().toString(),
+                            trip.destStation.getId().toString(),
                             trip.departureTime,
                             trip.departureTime - trip.walkingTimeToPooledStation, // Arrival time at station
                             trip.purpose,
@@ -205,11 +199,11 @@ public class Utils {
     public static class UAMTrip {
         String tripId;
         double originX, originY, destX, destY, departureTime, flightDistance;
-        Station origStation, destStation; // Changed to Integer to handle null values
+        UAMStation origStation, destStation; // Changed to Integer to handle null values
         String purpose, income;
         double walkingTimeToPooledStation; // Time to walk to the station
 
-        UAMTrip(String tripId, double originX, double originY, double destX, double destY, double departureTime, double flightDistance, Station origStation, Station destStation, String purpose, String income) {
+        UAMTrip(String tripId, double originX, double originY, double destX, double destY, double departureTime, double flightDistance, UAMStation origStation, UAMStation destStation, String purpose, String income) {
             this.tripId = tripId;
             this.originX = originX;
             this.originY = originY;
@@ -224,20 +218,9 @@ public class Utils {
         }
 
         // TODO: Use MATSim to calculate the routes and travel times
-        void calculateTeleportationTime(Station station) {
-            double distance = Math.sqrt(Math.pow(originX - station.x, 2) + Math.pow(originY - station.y, 2));
-            walkingTimeToPooledStation = distance / Teleportation_SPEED;
-        }
-    }
-
-    static class Station {
-        int id;
-        double x, y;
-
-        Station(String id, double x, double y) {
-            this.id = Integer.parseInt(id);
-            this.x = x;
-            this.y = y;
+        void calculateTeleportationTime(UAMStation station) {
+            double distance = Math.sqrt(Math.pow(originX - station.getLocationLink().getCoord().getX(), 2) + Math.pow(originY - station.getLocationLink().getCoord().getY(), 2));
+            walkingTimeToPooledStation = distance / TELEPORTATION_SPEED;
         }
     }
 
@@ -249,7 +232,7 @@ public class Utils {
         private final String networkPath;
 
         private Network network;
-        private Map<Integer, Station> stations;
+        private Map<Id<UAMStation>, UAMStation> stations;
         private Map<String, Double> selectedTrips;
         private Map<String, String[]> filteredTrips;
         private List<UAMTrip> uamTrips;
