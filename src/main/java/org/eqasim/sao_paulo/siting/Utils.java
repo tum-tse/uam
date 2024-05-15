@@ -4,44 +4,31 @@ import java.io.*;
 import java.nio.file.*;
 import java.util.*;
 
-import java.util.Collection;
 import java.util.Map;
 
 import net.bhl.matsim.uam.infrastructure.UAMStation;
 import net.bhl.matsim.uam.infrastructure.readers.UAMXMLReader;
-import org.matsim.api.core.v01.Coord;
 import org.matsim.api.core.v01.Id;
 import org.matsim.api.core.v01.network.Link;
 import org.matsim.api.core.v01.network.Network;
 import org.matsim.core.network.NetworkUtils;
-import org.matsim.core.utils.collections.QuadTree;
 import org.matsim.core.network.io.MatsimNetworkReader;
 
-public class TripPooling {
+public class Utils {
     private static final double SEARCH_RADIUS = 1000; // Radius in meters for nearby station search
     private static final int UAM_CAPACITY = 4; // Maximum number of seats in a UAM vehicle
-    private static final double Teleportation_SPEED = 30/3.6; // Walking speed in meters per second
+    private static final double Teleportation_SPEED = 20/3.6; // Walking speed in meters per second
 
     public static void main(String[] args) throws IOException {
-        // minutes converted to seconds
-        double POOLING_TIME_WINDOW = 5 * 60;
+        DataLoader dataLoader = new DataLoader();
+        dataLoader.loadAllData();
 
+        // minutes converted to seconds
+        double POOLING_TIME_WINDOW = 10 * 60;
         // Define the paths to your data files
-        Path selectedTripsPath = Paths.get("src/main/java/org/eqasim/sao_paulo/siting/selected_trips.csv");
-        Path allTripsPath = Paths.get("scenarios/1-percent/UpdatedFinalTrips.csv");
-        Path uamTripsPath = Paths.get("scenarios/1-percent/UAMTravelTimes.csv");
-        String stationsPath = "scenarios/1-percent/uam-scenario/uam_vehicles.xml.gz";
-        String networkPath = "scenarios/1-percent/uam-scenario/uam_network.xml.gz";
         String pooledTripsPath = "src/main/java/org/eqasim/sao_paulo/siting/output_pooled_trips.csv";
 
-        Network network = NetworkUtils.createNetwork();
-        new MatsimNetworkReader(network).readFile(networkPath);
-        Map<Integer, Station> stations = readStations(stationsPath, network);
-        Map<String, Double> selectedTrips = readSelectedTrips(selectedTripsPath);
-        Map<String, String[]> filteredTrips = filterTrips(allTripsPath, selectedTrips);
-        List<UAMTrip> uamTrips = readUAMTrips(uamTripsPath, filteredTrips, stations);
-
-        List<List<UAMTrip>> pooledGroups = poolTrips(uamTrips, POOLING_TIME_WINDOW, stations);
+        List<List<UAMTrip>> pooledGroups = poolTrips(dataLoader.uamTrips, POOLING_TIME_WINDOW, dataLoader.stations);
         // Calculate and print pooling statistics
         printPoolingStatistics(pooledGroups);
         writePoolingResultsToCSV(pooledGroups, pooledTripsPath);
@@ -215,7 +202,7 @@ public class TripPooling {
         }
     }
 
-    static class UAMTrip {
+    public static class UAMTrip {
         String tripId;
         double originX, originY, destX, destY, departureTime, flightDistance;
         Station origStation, destStation; // Changed to Integer to handle null values
@@ -251,6 +238,41 @@ public class TripPooling {
             this.id = Integer.parseInt(id);
             this.x = x;
             this.y = y;
+        }
+    }
+
+    public static class DataLoader {
+        private final Path selectedTripsPath;
+        private final Path allTripsPath;
+        private final Path uamTripsPath;
+        private final String stationsPath;
+        private final String networkPath;
+
+        private Network network;
+        private Map<Integer, Station> stations;
+        private Map<String, Double> selectedTrips;
+        private Map<String, String[]> filteredTrips;
+        private List<UAMTrip> uamTrips;
+
+        public DataLoader() {
+            this.selectedTripsPath = Paths.get("src/main/java/org/eqasim/sao_paulo/siting/selected_trips.csv");
+            this.allTripsPath = Paths.get("scenarios/1-percent/UpdatedFinalTrips.csv");
+            this.uamTripsPath = Paths.get("scenarios/1-percent/UAMTravelTimes.csv");
+            this.stationsPath = "scenarios/1-percent/uam-scenario/uam_vehicles.xml.gz";
+            this.networkPath = "scenarios/1-percent/uam-scenario/uam_network.xml.gz";
+        }
+
+        public void loadAllData() throws IOException {
+            this.network = NetworkUtils.createNetwork();
+            new MatsimNetworkReader(network).readFile(networkPath);
+            this.stations = Utils.readStations(stationsPath, network);
+            this.selectedTrips = Utils.readSelectedTrips(selectedTripsPath);
+            this.filteredTrips = Utils.filterTrips(allTripsPath, selectedTrips);
+            this.uamTrips = Utils.readUAMTrips(uamTripsPath, filteredTrips, stations);
+        }
+
+        public List<UAMTrip> getUamTrips() {
+            return uamTrips;
         }
     }
 
