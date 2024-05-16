@@ -32,7 +32,7 @@ public class Utils {
         dataLoader.loadAllData();
 
         // minutes converted to seconds
-        double POOLING_TIME_WINDOW = 5 * 60;
+        double POOLING_TIME_WINDOW = 10 * 60;
         // Define the paths to your data files
         String pooledTripsPath = "src/main/java/org/eqasim/sao_paulo/siting/output_pooled_trips.csv";
 
@@ -124,8 +124,8 @@ public class Utils {
                 double accessTimeToOldStationForPoolTrip = trip.calculateTeleportationTime(trip.origStation);
                 double accessTimeToNewStationForPoolTrip = trip.calculateTeleportationTime(otherTrip.origStation);
                 double arrivalTimeDifference = (otherTrip.departureTime+accessTimeToStationForBaseTrip - (trip.departureTime+accessTimeToNewStationForPoolTrip));
-                if (trip != otherTrip && areStationsNearby(trip.origStation, otherTrip.origStation) &&
-                    areStationsNearby(trip.destStation, otherTrip.destStation) &&
+                if (trip != otherTrip && areStationsNearby(trip.originX, trip.getOriginY(), otherTrip.origStation) &&
+                    areStationsNearby(trip.destX, trip.destY, otherTrip.destStation) &&
                     arrivalTimeDifference <= timeWindow && arrivalTimeDifference >= 0) {
                     String key = otherTrip.origStation + "_" + otherTrip.destStation;
                     potentialGroups.computeIfAbsent(key, k -> new HashSet<>()).add(otherTrip);
@@ -158,6 +158,11 @@ public class Utils {
     private static boolean areStationsNearby(UAMStation stationId1, UAMStation stationId2) {
         // TODO: Use MATSim to calculate the distance
         double distance = Math.sqrt(Math.pow(stationId1.getLocationLink().getCoord().getX() - stationId2.getLocationLink().getCoord().getX(), 2) + Math.pow(stationId1.getLocationLink().getCoord().getY() - stationId2.getLocationLink().getCoord().getY(), 2));
+        return distance <= SEARCH_RADIUS;
+    }
+    private static boolean areStationsNearby(double x, double y, UAMStation stationId) {
+        // TODO: Use MATSim to calculate the distance
+        double distance = Math.sqrt(Math.pow(x - stationId.getLocationLink().getCoord().getX(), 2) + Math.pow(y - stationId.getLocationLink().getCoord().getY(), 2));
         return distance <= SEARCH_RADIUS;
     }
 
