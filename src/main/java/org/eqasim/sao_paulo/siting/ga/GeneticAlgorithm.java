@@ -66,11 +66,11 @@ public class GeneticAlgorithm {
         }
     }
 
-    private static List<UAMTrip> extractSubTrips(List<UAMTrip> uamTrips) {
+    private static ArrayList<UAMTrip> extractSubTrips(List<UAMTrip> uamTrips) {
         // extract sub trips from uamTrips based on the departure time of trips falling between buffer start and end time
         return uamTrips.stream()
                 .filter(trip -> trip.getDepartureTime() >= BUFFER_START_TIME && trip.getDepartureTime() < BUFFER_END_TIME)
-                .collect(Collectors.toList());
+                .collect(Collectors.toCollection(ArrayList::new));
     }
 
     private static Map<String, List<UAMVehicle>> findNearbyVehiclesToTrips(List<UAMTrip> subTrips, Map<Id<UAMStation>, List<UAMVehicle>> stationVehicleMap) {
