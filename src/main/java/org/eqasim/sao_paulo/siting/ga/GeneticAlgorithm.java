@@ -1,7 +1,19 @@
 package org.eqasim.sao_paulo.siting.ga;
 
-import java.util.Arrays;
-import java.util.Random;
+import net.bhl.matsim.uam.infrastructure.UAMStation;
+import org.eqasim.sao_paulo.siting.Utils.*;
+
+import java.io.IOException;
+import java.util.*;
+import java.util.stream.Collectors;
+
+import net.bhl.matsim.uam.infrastructure.UAMVehicle;
+import org.matsim.contrib.dvrp.fleet.DvrpVehicle;
+import org.matsim.contrib.dvrp.fleet.FleetSpecificationImpl;
+import net.bhl.matsim.uam.infrastructure.UAMVehicleType;
+import org.matsim.contrib.dvrp.fleet.ImmutableDvrpVehicleSpecification;
+import org.matsim.api.core.v01.network.Link;
+import org.matsim.api.core.v01.Id;
 
 public class GeneticAlgorithm {
     private static final int POP_SIZE = 100; // Population size
@@ -9,10 +21,17 @@ public class GeneticAlgorithm {
     private static final double MUTATION_RATE = 0.05; // Mutation rate
     private static final double CROSSOVER_RATE = 0.7; // Crossover rate
     private static final int TOURNAMENT_SIZE = 5; // Tournament size for selection
-    private static final Random rand = new Random();
+    private static final long SEED = 4711; // MATSim default Random Seed
+    private static final Random rand = new Random(SEED);
+    private static final int BUFFER_START_TIME = 3600*7; // Buffer start time for the first trip
+    private static final int BUFFER_END_TIME = 3600*7+240; // Buffer end time for the last trip
 
     private static final double ALPHA = 1.0; // Weight for saved flight distances
     private static final double BETA = 0.5; // Weight for additional travel time
+
+    private static final int VEHICLE_CAPACITY = 4; // Vehicle capacity
+    private static final double SEARCH_RADIUS_ORIGIN = 1000; // search radius for origin station
+    private static final double SEARCH_RADIUS_DESTINATION = 1000; // search radius for destination station
 
     // Assuming these arrays are initialized elsewhere in your code:
     private static double[] flightDistances; // Distances for each trip
@@ -22,27 +41,68 @@ public class GeneticAlgorithm {
     private static double[][] egressTimesUpdated; // Updated egress times for each trip and vehicle
     private static double[][] waitingTimes; // Waiting times at the parking station for each trip and vehicle
 
+    private static List<UAMTrip> subTrips = null;
+    //private static Map<Id<DvrpVehicle>, UAMVehicle> vehicles;
+    private static Map<Id<UAMStation>, UAMStation> stations = null;
+    private static Map<Id<UAMStation>, List<UAMVehicle>> stationVehicleMap = null;
+    private static Map<String, Id<DvrpVehicle>> tripVehicleMap = null;
+
     // Main method to run the GA
-    public static void main(String[] args) {
-        int[][] population = initializePopulation(POP_SIZE);
+    public static void main(String[] args) throws IOException {
+        // Load data
+        DataLoader dataLoader = new DataLoader();
+        dataLoader.loadAllData();
+        subTrips = extractSubTrips(dataLoader.getUamTrips());
+        //vehicles = dataLoader.getVehicles();
+        stations = dataLoader.getStations();
+        stationVehicleMap = saveStationVehicleNumber(subTrips);
+        tripVehicleMap = findNearbyVehiclesToTrips(subTrips, stationVehicleMap);
+
+        // GA
+        int[][] population = initializePopulation();
         for (int gen = 0; gen < MAX_GENERATIONS; gen++) {
             population = evolvePopulation(population);
             System.out.println("Generation " + gen + ": Best fitness = " + findBestFitness(population));
         }
     }
 
+    private static List<UAMTrip> extractSubTrips(List<UAMTrip> uamTrips) {
+        // extract sub trips from uamTrips based on the departure time of trips falling between buffer start and end time
+        List<UAMTrip> filteredTrips = uamTrips.stream()
+                .filter(trip -> trip.getDepartureTime() >= BUFFER_START_TIME && trip.getDepartureTime() < BUFFER_END_TIME)
+                .collect(Collectors.toList());
+        return filteredTrips;
+    }
+
+    private static Map<String, Id<DvrpVehicle>> findNearbyVehiclesToTrips(List<UAMTrip> subTrips, Map<Id<UAMStation>, List<UAMVehicle>> stationVehicleMap) {
+        Map<String, Id<DvrpVehicle>> tripVehicleMap = new HashMap<>();
+        for (UAMTrip trip: subTrips){
+            for (UAMStation station: stations.values()) {
+                if(trip.calculateTeleportationDistance(station)<=SEARCH_RADIUS_ORIGIN){
+                    // add the vehicles at the station to the tripVehicleMap
+                    List<UAMVehicle> vehicles = stationVehicleMap.get(station.getId());
+                    for (UAMVehicle vehicle: vehicles){
+                        tripVehicleMap.put(trip.getTripId(), vehicle.getId());
+                    }
+                }
+            }
+        }
+        return tripVehicleMap;
+    }
+
     // Initialize population with random assignments
-    private static int[][] initializePopulation(int size) {
-        int[][] population = new int[size][];
-        for (int i = 0; i < size; i++) {
+    private static int[][] initializePopulation() {
+        int[][] population = new int[GeneticAlgorithm.POP_SIZE][];
+        for (int i = 0; i < GeneticAlgorithm.POP_SIZE; i++) {
             population[i] = generateIndividual();
         }
         return population;
     }
 
+    //TODO: continue from here
     // Generate a random individual
     private static int[] generateIndividual() {
-        int[] individual = new int[NUMBER_OF_TRIPS]; // Assume NUMBER_OF_TRIPS is defined
+        int[] individual = new int[subTrips.size()]; // Assume NUMBER_OF_TRIPS is defined
         for (int i = 0; i < individual.length; i++) {
             individual[i] = rand.nextInt(NUMBER_OF_VEHICLES); // Assume NUMBER_OF_VEHICLES is defined
         }
@@ -61,10 +121,11 @@ public class GeneticAlgorithm {
         return newPop;
     }
 
-    // Selection - Tournament selection
+    // Selection - Tournament selection with null check
     private static int[] select(int[][] pop) {
         int[] best = null;
         double bestFitness = Double.MIN_VALUE;
+
         for (int i = 0; i < TOURNAMENT_SIZE; i++) {
             int[] individual = pop[rand.nextInt(POP_SIZE)];
             double fitness = calculateFitness(individual);
@@ -73,7 +134,17 @@ public class GeneticAlgorithm {
                 bestFitness = fitness;
             }
         }
-        return Arrays.copyOf(best, best.length);
+
+        //TODO: Reconsider this part
+        // Check if 'best' is null which can be due to empty population array
+        if (best == null) {
+            // Handle the scenario when no best individual was found
+            // For example: return a new random individual or handle the error
+            // Returning new random individual as a fallback:
+            best = generateIndividual();  // Assuming generateIndividual() creates a valid random individual
+        }
+
+        return Arrays.copyOf(best, best.length); // Return a copy of the best individual
     }
 
     // Crossover - Single point crossover
@@ -132,4 +203,49 @@ public class GeneticAlgorithm {
         }
         return bestFitness;
     }
+
+
+
+
+    private static Map<Id<UAMStation>, List<UAMVehicle>> saveStationVehicleNumber(List<UAMTrip> subTrips) {
+        Map<Id<UAMStation>, List<UAMVehicle>> stationVehicleMap = new HashMap<>();
+
+        // initialize the map with the station and vehicle instances
+        int intId = 1;
+
+/*        UAMVehicleType vehicleType = new UAMVehicleType(id, capacity, range, horizontalSpeed, verticalSpeed,
+                boardingTime, deboardingTime, turnAroundTime, energyConsumptionVertical, energyConsumptionHorizontal,
+                maximumCharge);*/
+        final Map<Id<UAMVehicleType>, UAMVehicleType> vehicleTypes = new HashMap<>();
+        Id<UAMVehicleType> vehicleTypeId = Id.create("poolingVehicle", UAMVehicleType.class);
+        UAMVehicleType vehicleType = new UAMVehicleType(vehicleTypeId, 0, 0, 0, 0,
+                0, 0, 0);
+        vehicleTypes.put(vehicleTypeId, vehicleType);
+
+        // save the station's vehicle number for the current time based on the UAMTrips' origin station
+        for (UAMTrip subTrip : subTrips) {
+            // Create a builder instance
+            ImmutableDvrpVehicleSpecification.Builder builder = ImmutableDvrpVehicleSpecification.newBuilder();
+            // Set the properties of the vehicle
+            builder.id(Id.create(String.valueOf(intId++), DvrpVehicle.class));
+            builder.startLinkId(subTrip.getOriginStation().getLocationLink().getId());
+            builder.capacity(VEHICLE_CAPACITY);
+            builder.serviceBeginTime(BUFFER_START_TIME);
+            builder.serviceEndTime(3600);
+            // Build the vehicle specification
+            ImmutableDvrpVehicleSpecification vehicleSpecification = builder.build();
+
+            UAMVehicle vehicle = new UAMVehicle(vehicleSpecification,
+                    subTrip.getOriginStation().getLocationLink(), subTrip.getOriginStation().getId(), vehicleTypes.get(vehicleTypeId));
+
+            // Get the station ID
+            Id<UAMStation> stationId = subTrip.getOriginStation().getId();
+            // Check if there is already a list for this station ID, if not, create one
+            List<UAMVehicle> vehiclesAtStation = stationVehicleMap.computeIfAbsent(stationId, k -> new ArrayList<>());
+            // Add the new vehicle to the list
+            vehiclesAtStation.add(vehicle);
+        }
+        return stationVehicleMap;
+    }
+
 }
