@@ -169,15 +169,6 @@ public class Utils {
         for (List<UAMTrip> group : pooledGroups) {
             //identify the base trip which has the earliest departure time
             UAMTrip baseTrip = group.stream().max(Comparator.comparing(UAMTrip::getDepartureTime)).orElse(null);
-/*            UAMTrip baseTrip = null;
-            if (!group.isEmpty()) {
-                baseTrip = group.get(0);  // Start with the first trip as the base
-                for (UAMTrip pooledTrip : group) {
-                    if (pooledTrip.getDepartureTime().compareTo(baseTrip.getDepartureTime()) < 0) {
-                        baseTrip = pooledTrip;  // Found a trip with an earlier departure time
-                    }
-                }
-            }*/
 
             for (UAMTrip pooledTrip : group) {
                 if (!pooledTrip.equals(baseTrip)) {
@@ -221,10 +212,10 @@ public class Utils {
     }
 
     public static class UAMTrip {
-        private String tripId;
-        private double originX, originY, destX, destY, departureTime, flightDistance;
-        private UAMStation origStation, destStation; // Changed to Integer to handle null values
-        private String purpose, income;
+        private final String tripId;
+        private final double originX, originY, destX, destY, departureTime, flightDistance;
+        private final UAMStation origStation, destStation; // Changed to Integer to handle null values
+        private final String purpose, income;
         private double walkingTimeToPooledStation; // Time to walk to the station
 
         UAMTrip(String tripId, double originX, double originY, double destX, double destY, double departureTime, double flightDistance, UAMStation origStation, UAMStation destStation, String purpose, String income) {
