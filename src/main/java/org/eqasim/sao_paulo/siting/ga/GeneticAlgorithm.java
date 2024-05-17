@@ -9,10 +9,8 @@ import java.util.stream.Collectors;
 
 import net.bhl.matsim.uam.infrastructure.UAMVehicle;
 import org.matsim.contrib.dvrp.fleet.DvrpVehicle;
-import org.matsim.contrib.dvrp.fleet.FleetSpecificationImpl;
 import net.bhl.matsim.uam.infrastructure.UAMVehicleType;
 import org.matsim.contrib.dvrp.fleet.ImmutableDvrpVehicleSpecification;
-import org.matsim.api.core.v01.network.Link;
 import org.matsim.api.core.v01.Id;
 
 public class GeneticAlgorithm {
@@ -27,7 +25,8 @@ public class GeneticAlgorithm {
     private static final int BUFFER_END_TIME = 3600*7+240; // Buffer end time for the last trip
 
     private static final double ALPHA = 1.0; // Weight for saved flight distances
-    private static final double BETA = 0.5; // Weight for additional travel time
+    private static final double BETA = - 0.5; // Weight for additional travel time
+    private static final double BETA_NONE_POOLED_TRIP_EARLIER_DEPARTURE = - 0.25;
 
     private static final int VEHICLE_CAPACITY = 4; // Vehicle capacity
     private static final double SEARCH_RADIUS_ORIGIN = 1000; // search radius for origin station
@@ -44,7 +43,8 @@ public class GeneticAlgorithm {
     private static double[][] waitingTimes; // Waiting times at the parking station for each trip and vehicle
 
     private static List<UAMTrip> subTrips = null;
-    //private static Map<Id<DvrpVehicle>, UAMVehicle> vehicles;
+    private static final Map<Id<DvrpVehicle>, UAMVehicle> vehicles = new HashMap<>();
+    private static final Map<Id<DvrpVehicle>, UAMStation> vehicleStationMap = new HashMap<>();
     private static Map<Id<UAMStation>, UAMStation> stations = null;
     private static Map<Id<UAMStation>, List<UAMVehicle>> stationVehicleMap = null;
     private static Map<String, Map<UAMVehicle, Integer>> tripVehicleMap = null;
@@ -185,13 +185,13 @@ public class GeneticAlgorithm {
         //TODO: Reconsider this part
         // Check if 'best' is null which can be due to empty population array
         if (best == null) {
-            //print the reason and terminate the program
-            System.out.println("No best individual found in the population");
-            System.exit(0);
             // Handle the scenario when no best individual was found
             // For example: return a new random individual or handle the error
             // Returning new random individual as a fallback:
             best = generateIndividual();  // Assuming generateIndividual() creates a valid random individual
+
+            //throw new IllegalArgumentException("No best individual found");
+            throw new IllegalArgumentException("No best individual found");
         }
 
         return Arrays.copyOf(best, best.length); // Return a copy of the best individual
@@ -224,20 +224,67 @@ public class GeneticAlgorithm {
         return individual;
     }
 
-    //TODO: continue from here
     // Calculate fitness for an individual
     private static double calculateFitness(int[] individual) {
-        double fitness = 0;
-        int trips = individual.length; // Number of trips
+        double fitness = 0.0;
+        Map<Integer, List<UAMTrip>> vehicleAssignments = new HashMap<>();
 
-        for (int i = 0; i < trips; i++) {
-            int v = individual[i]; // Vehicle assigned to trip i
-            double savedFlightDistance = flightDistances[i];
-            double additionalTravelTime = accessTimesUpdated[i][v] - accessTimesOriginal[i][v]
-                    + egressTimesUpdated[i][v] - egressTimesOriginal[i][v]
-                    + waitingTimes[i][v];
+        // Organize trips by assigned vehicle
+        for (int i = 0; i < individual.length; i++) {
+            int vehicleId = individual[i];
+            if (!vehicleAssignments.containsKey(vehicleId)) {
+                vehicleAssignments.put(vehicleId, new ArrayList<>());
+            }
+            vehicleAssignments.get(vehicleId).add(subTrips.get(i));
+        }
 
-            fitness += (ALPHA * savedFlightDistance - BETA * additionalTravelTime);
+        // Calculate fitness per vehicle
+        for (Map.Entry<Integer, List<UAMTrip>> entry : vehicleAssignments.entrySet()) {
+            List<UAMTrip> trips = entry.getValue();
+            UAMStation stationOfVehicle = vehicleStationMap.get(Id.create(entry.getKey().toString(), DvrpVehicle.class));
+
+            // safety check
+            if (trips.isEmpty()) continue;
+            if (trips.size() == 1){
+                UAMTrip trip = trips.get(0);
+                double additionalTravelTime = trip.calculateTeleportationTime(stationOfVehicle) - trip.calculateTeleportationDistance(trip.getOriginStation());
+                if(additionalTravelTime > 0) {
+                    fitness += BETA * additionalTravelTime;
+                } else {
+                    fitness += BETA_NONE_POOLED_TRIP_EARLIER_DEPARTURE * additionalTravelTime;
+                }
+                continue;
+            }
+
+            // Find the base trip (the trip with the earliest arrival time at the departure UAM station)
+            UAMTrip baseTrip = trips.get(0);
+            for (UAMTrip trip : trips) {
+                double accessTimeOfBaseTrip = baseTrip.calculateTeleportationTime(stationOfVehicle);
+                double accessTimeOfPooledTrip = trip.calculateTeleportationTime(stationOfVehicle);
+                if ((trip.getDepartureTime() + accessTimeOfPooledTrip) >= (baseTrip.getDepartureTime() + accessTimeOfBaseTrip)) {
+                    baseTrip = trip;
+                }
+            }
+
+            double boardingTimeForAllTrips = baseTrip.getDepartureTime() + baseTrip.calculateTeleportationTime(stationOfVehicle);
+            // Calculate fitness based on the proposed pooling option
+            for (UAMTrip trip : trips) {
+                if(trip.getTripId().equals(baseTrip.getTripId())){
+/*                    double originalArrivalTimeForBaseTrip = baseTrip.getDepartureTime() + baseTrip.calculateTeleportationDistance(stationOfVehicle);
+                    double additionalTravelTime = originalArrivalTimeForBaseTrip;
+                    fitness += BETA * additionalTravelTime;*/
+                    continue;
+                }
+                double savedFlightDistance = trip.getFlightDistance();
+                // calculate additional travel time
+                double originalArrivalTimeForThePooledTrip = trip.getDepartureTime() + trip.calculateTeleportationTime(trip.getOriginStation());
+                double additionalTravelTime = boardingTimeForAllTrips - originalArrivalTimeForThePooledTrip;
+                if (additionalTravelTime < 0){
+                    additionalTravelTime = 0;
+                    //TODO: reconsider for "negative additional travel time" cases
+                }
+                fitness += ALPHA * savedFlightDistance + BETA * additionalTravelTime;
+            }
         }
 
         return fitness;
@@ -281,6 +328,8 @@ public class GeneticAlgorithm {
             List<UAMVehicle> vehiclesAtStation = stationVehicleMap.computeIfAbsent(stationId, k -> new ArrayList<>());
             // Add the new vehicle to the list
             vehiclesAtStation.add(vehicle);
+            vehicles.put(vehicle.getId(), vehicle);
+            vehicleStationMap.put(vehicle.getId(), subTrip.getOriginStation());
         }
         return stationVehicleMap;
     }
