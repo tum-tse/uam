@@ -111,32 +111,36 @@ public class GeneticAlgorithm {
         return population;
     }
 
+    private static void assignAvailableVehicle(int i, int[] individual) {
+        Map<UAMVehicle, Integer> vehicleCapacityMap = tripVehicleMap.get(subTrips.get(i).getTripId());
+        List<UAMVehicle> vehicleList = vehicleCapacityMap.entrySet().stream()
+                .filter(entry -> entry.getValue() > 0)
+                .map(Map.Entry::getKey)
+                .collect(Collectors.toCollection(ArrayList::new));
+
+        if (!vehicleList.isEmpty()) {
+            int vehicleIndex = rand.nextInt(vehicleList.size());
+            UAMVehicle selectedVehicle = vehicleList.get(vehicleIndex);
+            Integer currentCapacity = vehicleCapacityMap.get(selectedVehicle);
+            if (currentCapacity > 0) {
+                individual[i] = Integer.parseInt(selectedVehicle.getId().toString());
+
+                // Decrement capacity and explicitly update tripVehicleMap
+                vehicleCapacityMap.put(selectedVehicle, currentCapacity - 1);
+                tripVehicleMap.put(subTrips.get(i).getTripId(), vehicleCapacityMap);
+            }
+        } else {
+            // Handle the case when there is no available vehicle
+            // This might involve setting a default value or handling it in the fitness function
+            individual[i] = VALUE_FOR_NO_VEHICLE_AVAILABLE;
+        }
+    }
+
     // Generate a random individual
     private static int[] generateIndividual() {
         int[] individual = new int[subTrips.size()];
         for (int i = 0; i < individual.length; i++) {
-            Map<UAMVehicle, Integer> vehicleCapacityMap = tripVehicleMap.get(subTrips.get(i).getTripId());
-            List<UAMVehicle> vehicleList = vehicleCapacityMap.entrySet().stream()
-                    .filter(entry -> entry.getValue() > 0)
-                    .map(Map.Entry::getKey)
-                    .collect(Collectors.toCollection(ArrayList::new));
-
-            if (!vehicleList.isEmpty()) {
-                int vehicleIndex = rand.nextInt(vehicleList.size());
-                UAMVehicle selectedVehicle = vehicleList.get(vehicleIndex);
-                Integer currentCapacity = vehicleCapacityMap.get(selectedVehicle);
-                if (currentCapacity > 0) {
-                    individual[i] = Integer.parseInt(selectedVehicle.getId().toString());
-
-                    // Decrement capacity and explicitly update tripVehicleMap
-                    vehicleCapacityMap.put(selectedVehicle, currentCapacity - 1);
-                    tripVehicleMap.put(subTrips.get(i).getTripId(), vehicleCapacityMap);
-                }
-            } else {
-                // Handle the case when there is no available vehicle
-                // This might involve setting a default value or handling it in the fitness function
-                individual[i] = VALUE_FOR_NO_VEHICLE_AVAILABLE;
-            }
+            assignAvailableVehicle(i, individual);
         }
         return individual;
     }
@@ -201,7 +205,7 @@ public class GeneticAlgorithm {
     private static int[] mutate(int[] individual) {
         for (int i = 0; i < individual.length; i++) {
             if (rand.nextDouble() < MUTATION_RATE) {
-                individual[i] = rand.nextInt(NUMBER_OF_VEHICLES);
+                assignAvailableVehicle(i, individual);
             }
         }
         return individual;
