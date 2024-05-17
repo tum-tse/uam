@@ -264,6 +264,10 @@ public class Utils {
         public UAMStation getOriginStation() {
             return origStation;
         }
+        //getTripId
+        public String getTripId() {
+            return tripId;
+        }
     }
 
     public static class DataLoader {
