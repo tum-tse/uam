@@ -105,14 +105,23 @@ public class GeneticAlgorithm {
     private static int[] generateIndividual() {
         int[] individual = new int[subTrips.size()];
         for (int i = 0; i < individual.length; i++) {
-            Map<UAMVehicle, Integer> vehicleCapacityMap = tripVehicleMap.get(subTrips.get(i).getTripId()); // Retrieve the vehicle List using the trip ID as a key
-            // Get the list of vehicles where the capacity is greater than 0
+            Map<UAMVehicle, Integer> vehicleCapacityMap = tripVehicleMap.get(subTrips.get(i).getTripId());
             List<UAMVehicle> vehicleList = vehicleCapacityMap.entrySet().stream()
                     .filter(entry -> entry.getValue() > 0)
                     .map(Map.Entry::getKey)
-                    .collect(Collectors.toCollection(ArrayList::new)); // Collecting results into an ArrayList
-            int vehicleIndex = rand.nextInt(vehicleList.size());
-            individual[i] = Integer.parseInt(vehicleList.get(vehicleIndex).getId().toString());
+                    .collect(Collectors.toCollection(ArrayList::new));
+
+            if (!vehicleList.isEmpty()) {
+                int vehicleIndex = rand.nextInt(vehicleList.size());
+                UAMVehicle selectedVehicle = vehicleList.get(vehicleIndex);
+                Integer currentCapacity = vehicleCapacityMap.get(selectedVehicle);
+                if (currentCapacity > 0) {
+                    individual[i] = Integer.parseInt(selectedVehicle.getId().toString());
+                    vehicleCapacityMap.put(selectedVehicle, currentCapacity - 1);
+                }
+            } else {
+                // deal with the case when there is no available vehicle
+            }
         }
         return individual;
     }
