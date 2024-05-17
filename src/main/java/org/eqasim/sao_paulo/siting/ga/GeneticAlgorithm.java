@@ -45,7 +45,7 @@ public class GeneticAlgorithm {
     //private static Map<Id<DvrpVehicle>, UAMVehicle> vehicles;
     private static Map<Id<UAMStation>, UAMStation> stations = null;
     private static Map<Id<UAMStation>, List<UAMVehicle>> stationVehicleMap = null;
-    private static Map<String, List<UAMVehicle>> tripVehicleMap = null;
+    private static Map<String, Map<UAMVehicle, Integer>> tripVehicleMap = null;
 
     // Main method to run the GA
     public static void main(String[] args) throws IOException {
@@ -73,14 +73,18 @@ public class GeneticAlgorithm {
                 .collect(Collectors.toCollection(ArrayList::new));
     }
 
-    private static Map<String, List<UAMVehicle>> findNearbyVehiclesToTrips(List<UAMTrip> subTrips, Map<Id<UAMStation>, List<UAMVehicle>> stationVehicleMap) {
-        Map<String, List<UAMVehicle>> tripVehicleMap = new HashMap<>();
-        for (UAMTrip trip: subTrips) {
-            for (UAMStation station: stations.values()) {
+    private static Map<String, Map<UAMVehicle, Integer>> findNearbyVehiclesToTrips(List<UAMTrip> subTrips, Map<Id<UAMStation>, List<UAMVehicle>> stationVehicleMap) {
+        Map<String, Map<UAMVehicle, Integer>> tripVehicleMap = new HashMap<>();
+        for (UAMTrip trip : subTrips) {
+            for (UAMStation station : stations.values()) {
                 if (trip.calculateTeleportationDistance(station) <= SEARCH_RADIUS_ORIGIN) {
                     List<UAMVehicle> vehicles = stationVehicleMap.get(station.getId());
-                    List<UAMVehicle> existingVehicles = tripVehicleMap.getOrDefault(trip.getTripId(), new ArrayList<>());
-                    existingVehicles.addAll(vehicles);
+                    Map<UAMVehicle, Integer> existingVehicles = tripVehicleMap.getOrDefault(trip.getTripId(), new HashMap<>());
+
+                    for (UAMVehicle vehicle : vehicles) {
+                        existingVehicles.put(vehicle, VEHICLE_CAPACITY);  // Set the count to 4 for each vehicle
+                    }
+
                     tripVehicleMap.put(trip.getTripId(), existingVehicles);
                 }
             }
@@ -101,7 +105,12 @@ public class GeneticAlgorithm {
     private static int[] generateIndividual() {
         int[] individual = new int[subTrips.size()];
         for (int i = 0; i < individual.length; i++) {
-            List<UAMVehicle> vehicleList = tripVehicleMap.get(subTrips.get(i).getTripId()); // Retrieve the vehicle List using the trip ID as a key
+            Map<UAMVehicle, Integer> vehicleCapacityMap = tripVehicleMap.get(subTrips.get(i).getTripId()); // Retrieve the vehicle List using the trip ID as a key
+            // Get the list of vehicles where the capacity is greater than 0
+            List<UAMVehicle> vehicleList = vehicleCapacityMap.entrySet().stream()
+                    .filter(entry -> entry.getValue() > 0)
+                    .map(Map.Entry::getKey)
+                    .collect(Collectors.toCollection(ArrayList::new)); // Collecting results into an ArrayList
             int vehicleIndex = rand.nextInt(vehicleList.size());
             individual[i] = Integer.parseInt(vehicleList.get(vehicleIndex).getId().toString());
         }
