@@ -145,7 +145,6 @@ public class GeneticAlgorithm {
         return individual;
     }
 
-    //TODO: continue from here
     // Evolve population
     private static int[][] evolvePopulation(int[][] pop) {
         int[][] newPop = new int[POP_SIZE][];
@@ -184,7 +183,7 @@ public class GeneticAlgorithm {
         return Arrays.copyOf(best, best.length); // Return a copy of the best individual
     }
 
-    // Crossover - Single point crossover
+    // Crossover - Single point crossover //TODO: Implement other types of crossover instead of single point
     private static int[] crossover(int[] parent1, int[] parent2) {
         int[] child = new int[parent1.length];
         if (rand.nextDouble() < CROSSOVER_RATE) {
@@ -211,6 +210,7 @@ public class GeneticAlgorithm {
         return individual;
     }
 
+    //TODO: continue from here
     // Calculate fitness for an individual
     private static double calculateFitness(int[] individual) {
         double fitness = 0;
