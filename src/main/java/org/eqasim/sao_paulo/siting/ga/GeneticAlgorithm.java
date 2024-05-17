@@ -33,6 +33,8 @@ public class GeneticAlgorithm {
     private static final double SEARCH_RADIUS_ORIGIN = 1000; // search radius for origin station
     private static final double SEARCH_RADIUS_DESTINATION = 1000; // search radius for destination station
 
+    private static final int VALUE_FOR_NO_VEHICLE_AVAILABLE = -1; // For example, using -1 as an indicator of no vehicle available
+
     // Assuming these arrays are initialized elsewhere in your code:
     private static double[] flightDistances; // Distances for each trip
     private static double[][] accessTimesOriginal; // Original access times for each trip
@@ -61,6 +63,7 @@ public class GeneticAlgorithm {
         // GA
         int[][] population = initializePopulation();
         for (int gen = 0; gen < MAX_GENERATIONS; gen++) {
+            resetVehicleCapacities(tripVehicleMap); // Reset the vehicle capacity at the beginning of each GA iteration since capacity of vehicles will be updated during each iteration
             population = evolvePopulation(population);
             System.out.println("Generation " + gen + ": Best fitness = " + findBestFitness(population));
         }
@@ -82,7 +85,7 @@ public class GeneticAlgorithm {
                     Map<UAMVehicle, Integer> existingVehicles = tripVehicleMap.getOrDefault(trip.getTripId(), new HashMap<>());
 
                     for (UAMVehicle vehicle : vehicles) {
-                        existingVehicles.put(vehicle, VEHICLE_CAPACITY);  // Set the count to 4 for each vehicle
+                        existingVehicles.put(vehicle, VEHICLE_CAPACITY);
                     }
 
                     tripVehicleMap.put(trip.getTripId(), existingVehicles);
@@ -90,6 +93,13 @@ public class GeneticAlgorithm {
             }
         }
         return tripVehicleMap;
+    }
+    private static void resetVehicleCapacities(Map<String, Map<UAMVehicle, Integer>> tripVehicleMap) {
+        for (Map<UAMVehicle, Integer> vehicleMap : tripVehicleMap.values()) {
+            vehicleMap.forEach((vehicle, capacity) -> {
+                vehicleMap.put(vehicle, VEHICLE_CAPACITY); // Reset capacity to 4
+            });
+        }
     }
 
     // Initialize population with random assignments
@@ -117,10 +127,15 @@ public class GeneticAlgorithm {
                 Integer currentCapacity = vehicleCapacityMap.get(selectedVehicle);
                 if (currentCapacity > 0) {
                     individual[i] = Integer.parseInt(selectedVehicle.getId().toString());
+
+                    // Decrement capacity and explicitly update tripVehicleMap
                     vehicleCapacityMap.put(selectedVehicle, currentCapacity - 1);
+                    tripVehicleMap.put(subTrips.get(i).getTripId(), vehicleCapacityMap);
                 }
             } else {
-                // deal with the case when there is no available vehicle
+                // Handle the case when there is no available vehicle
+                // This might involve setting a default value or handling it in the fitness function
+                individual[i] = VALUE_FOR_NO_VEHICLE_AVAILABLE;
             }
         }
         return individual;
