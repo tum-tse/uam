@@ -185,6 +185,9 @@ public class GeneticAlgorithm {
         //TODO: Reconsider this part
         // Check if 'best' is null which can be due to empty population array
         if (best == null) {
+            //print the reason and terminate the program
+            System.out.println("No best individual found in the population");
+            System.exit(0);
             // Handle the scenario when no best individual was found
             // For example: return a new random individual or handle the error
             // Returning new random individual as a fallback:
