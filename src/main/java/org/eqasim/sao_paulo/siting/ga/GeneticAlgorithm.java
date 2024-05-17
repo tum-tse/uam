@@ -68,6 +68,17 @@ public class GeneticAlgorithm {
             System.out.println("Generation " + gen + ": Best fitness = " + findBestFitness(population));
         }
     }
+    // Find the best fitness in the current population
+    private static double findBestFitness(int[][] population) {
+        double bestFitness = Double.MIN_VALUE;
+        for (int[] individual : population) {
+            double fitness = calculateFitness(individual);
+            if (fitness > bestFitness) {
+                bestFitness = fitness;
+            }
+        }
+        return bestFitness;
+    }
 
     private static ArrayList<UAMTrip> extractSubTrips(List<UAMTrip> uamTrips) {
         // extract sub trips from uamTrips based on the departure time of trips falling between buffer start and end time
@@ -228,20 +239,6 @@ public class GeneticAlgorithm {
 
         return fitness;
     }
-
-    // Find the best fitness in the current population
-    private static double findBestFitness(int[][] population) {
-        double bestFitness = Double.MIN_VALUE;
-        for (int[] individual : population) {
-            double fitness = calculateFitness(individual);
-            if (fitness > bestFitness) {
-                bestFitness = fitness;
-            }
-        }
-        return bestFitness;
-    }
-
-
 
 
     private static Map<Id<UAMStation>, List<UAMVehicle>> saveStationVehicleNumber(List<UAMTrip> subTrips) {
