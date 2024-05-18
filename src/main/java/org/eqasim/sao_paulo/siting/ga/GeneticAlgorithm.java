@@ -27,7 +27,7 @@ public class GeneticAlgorithm {
     private static final double ALPHA = 1.0; // Weight for saved flight distances
     private static final double BETA = - 0.5; // Weight for additional travel time
     private static final double BETA_NONE_POOLED_TRIP_EARLIER_DEPARTURE = - 0.1;
-    private static final double PELNALTY_FOR_VEHICLE_CAPACITY_VIOLATION = 1000;
+    private static final double PELNALTY_FOR_VEHICLE_CAPACITY_VIOLATION = -1000;
 
     private static final int VEHICLE_CAPACITY = 4; // Vehicle capacity
     private static final double SEARCH_RADIUS_ORIGIN = 200000; // search radius for origin station
