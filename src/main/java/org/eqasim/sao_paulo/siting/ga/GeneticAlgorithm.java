@@ -284,11 +284,11 @@ public class GeneticAlgorithm {
             if (trips.isEmpty()) continue;
             if (trips.size() == 1){
                 UAMTrip trip = trips.get(0);
-                double additionalTravelTime = trip.calculateAccessTeleportationTime(originStationOfVehicle) - trip.calculateAccessTeleportationDistance(trip.getOriginStation());
-                if(additionalTravelTime > 0) {
-                    fitness += BETA * additionalTravelTime;
+                double additionalTravelTimeDueToAccessMatching = trip.calculateAccessTeleportationTime(originStationOfVehicle) - trip.calculateAccessTeleportationDistance(trip.getOriginStation());
+                if(additionalTravelTimeDueToAccessMatching > 0) {
+                    fitness += BETA * additionalTravelTimeDueToAccessMatching;
                 } else {
-                    fitness += BETA_NONE_POOLED_TRIP_EARLIER_DEPARTURE * additionalTravelTime;
+                    fitness += BETA_NONE_POOLED_TRIP_EARLIER_DEPARTURE * additionalTravelTimeDueToAccessMatching;
                 }
                 continue;
             }
@@ -308,19 +308,19 @@ public class GeneticAlgorithm {
             for (UAMTrip trip : trips) {
                 if(trip.getTripId().equals(baseTrip.getTripId())){
 /*                    double originalArrivalTimeForBaseTrip = baseTrip.getDepartureTime() + baseTrip.calculateTeleportationDistance(originStationOfVehicle);
-                    double additionalTravelTime = originalArrivalTimeForBaseTrip;
-                    fitness += BETA * additionalTravelTime;*/
+                    double additionalTravelTimeDueToAccessMatching = originalArrivalTimeForBaseTrip;
+                    fitness += BETA * additionalTravelTimeDueToAccessMatching;*/
                     continue;
                 }
                 double savedFlightDistance = trip.getFlightDistance();
                 // calculate additional travel time
                 double originalArrivalTimeForThePooledTrip = trip.getDepartureTime() + trip.calculateAccessTeleportationTime(trip.getOriginStation());
-                double additionalTravelTime = boardingTimeForAllTrips - originalArrivalTimeForThePooledTrip;
-                if (additionalTravelTime < 0){
-                    additionalTravelTime = 0;
+                double additionalTravelTimeDueToAccessMatching = boardingTimeForAllTrips - originalArrivalTimeForThePooledTrip;
+                if (additionalTravelTimeDueToAccessMatching < 0){
+                    additionalTravelTimeDueToAccessMatching = 0;
                     //TODO: reconsider for "negative additional travel time" cases
                 }
-                fitness += ALPHA * savedFlightDistance + BETA * additionalTravelTime;
+                fitness += ALPHA * savedFlightDistance + BETA * additionalTravelTimeDueToAccessMatching;
             }
         }
 
