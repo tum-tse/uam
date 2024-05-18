@@ -26,7 +26,7 @@ public class GeneticAlgorithm {
 
     private static final double ALPHA = 1.0; // Weight for saved flight distances
     private static final double BETA = - 0.5; // Weight for additional travel time
-    private static final double BETA_NONE_POOLED_TRIP_EARLIER_DEPARTURE = - 0.25;
+    private static final double BETA_NONE_POOLED_TRIP_EARLIER_DEPARTURE = - 0.1;
 
     private static final int VEHICLE_CAPACITY = 4; // Vehicle capacity
     private static final double SEARCH_RADIUS_ORIGIN = 200000; // search radius for origin station
@@ -104,6 +104,9 @@ public class GeneticAlgorithm {
                         NUMBER_OF_TRIPS_LONGER_TAHN++;
                     }
                     List<UAMVehicle> vehicles = stationVehicleMap.get(station.getId());
+                    if (vehicles == null){
+                        continue;
+                    }
                     Map<UAMVehicle, Integer> existingVehicles = tripVehicleMap.getOrDefault(trip.getTripId(), new HashMap<>());
 
                     for (UAMVehicle vehicle : vehicles) {
@@ -139,7 +142,7 @@ public class GeneticAlgorithm {
         Map<UAMVehicle, Integer> vehicleCapacityMap = tripVehicleMap.get(subTrips.get(i).getTripId());
         //handle the case when there is no available vehicle
         if (vehicleCapacityMap == null) {
-            throw new IllegalArgumentException("No available vehicle for the trip, Please increase the search radius or add more vehicles to the station.");
+            throw new IllegalArgumentException("No available vehicle for the trip, Please increase the search radius.");
         }
         List<UAMVehicle> vehicleList = vehicleCapacityMap.entrySet().stream()
                 .filter(entry -> entry.getValue() > 0)
@@ -158,9 +161,9 @@ public class GeneticAlgorithm {
                 tripVehicleMap.put(subTrips.get(i).getTripId(), vehicleCapacityMap);
             }
         } else {
-            // Handle the case when there is no available vehicle
-            // This might involve setting a default value or handling it in the fitness function
+            // Handle the case when there is no available vehicle: This might involve setting a default value or handling it in the fitness function
             individual[i] = VALUE_FOR_NO_VEHICLE_AVAILABLE;
+            throw new IllegalArgumentException("Need to handle the case when there is no available vehicle for the trip.");
         }
     }
 
@@ -320,7 +323,7 @@ public class GeneticAlgorithm {
                 0, 0, 0);
         vehicleTypes.put(vehicleTypeId, vehicleType);
 
-        // Loop through the stations so that we can assign at least 1 to each station before we assign more vehicles based on the demand
+/*        // Loop through the stations so that we can assign at least 1 to each station before we assign more vehicles based on the demand
         for (UAMStation station : stations.values()) {
             UAMVehicle vehicle = createVehicle(station, vehicleTypes.get(vehicleTypeId));
 
@@ -333,7 +336,7 @@ public class GeneticAlgorithm {
             vehicles.put(vehicle.getId(), vehicle);
             vehicleStationMap.put(vehicle.getId(), station);
             stationVehicleMap.put(stationId, vehiclesAtStation);
-        }
+        }*/
 
         // save the station's vehicle number for the current time based on the UAMTrips' origin station
         for (UAMTrip subTrip : subTrips) {
