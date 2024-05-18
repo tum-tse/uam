@@ -159,6 +159,10 @@ public class GeneticAlgorithm {
                 // Decrement capacity and explicitly update tripVehicleMap
                 vehicleCapacityMap.put(selectedVehicle, currentCapacity - 1);
                 tripVehicleMap.put(subTrips.get(i).getTripId(), vehicleCapacityMap);
+            } else {
+                if (currentCapacity < 0){
+                    throw new IllegalArgumentException("Capacity of the selected vehicle is smaller than 1.");
+                }
             }
         } else {
             // Handle the case when there is no available vehicle: This might involve setting a default value or handling it in the fitness function
