@@ -52,7 +52,7 @@ public class GeneticAlgorithm {
     private static final Map<Id<DvrpVehicle>, UAMVehicle> vehicles = new HashMap<>();
     private static final Map<Id<DvrpVehicle>, UAMStation> vehicleStationMap = new HashMap<>();
     private static Map<Id<UAMStation>, UAMStation> stations = null;
-    private static Map<Id<UAMStation>, List<UAMVehicle>> stationVehicleMap = null;
+    private static Map<Id<UAMStation>, List<UAMVehicle>> originStationVehicleMap = null;
     private static Map<String, Map<UAMVehicle, Integer>> tripVehicleMap = null;
 
     // Main method to run the GA
@@ -63,8 +63,8 @@ public class GeneticAlgorithm {
         subTrips = extractSubTrips(dataLoader.getUamTrips());
         //vehicles = dataLoader.getVehicles();
         stations = dataLoader.getStations();
-        stationVehicleMap = saveStationVehicleNumber(subTrips);
-        tripVehicleMap = findNearbyVehiclesToTrips(subTrips, stationVehicleMap);
+        originStationVehicleMap = saveStationVehicleNumber(subTrips);
+        tripVehicleMap = findNearbyVehiclesToTrips(subTrips, originStationVehicleMap);
 
         // GA
         int[][] population = initializePopulation();
@@ -95,7 +95,7 @@ public class GeneticAlgorithm {
                 .collect(Collectors.toCollection(ArrayList::new));
     }
 
-    private static Map<String, Map<UAMVehicle, Integer>> findNearbyVehiclesToTrips(List<UAMTrip> subTrips, Map<Id<UAMStation>, List<UAMVehicle>> stationVehicleMap) {
+    private static Map<String, Map<UAMVehicle, Integer>> findNearbyVehiclesToTrips(List<UAMTrip> subTrips, Map<Id<UAMStation>, List<UAMVehicle>> originStationVehicleMap) {
         Map<String, Map<UAMVehicle, Integer>> tripVehicleMap = new HashMap<>();
         for (UAMTrip trip : subTrips) {
             for (UAMStation station : stations.values()) {
@@ -103,7 +103,7 @@ public class GeneticAlgorithm {
                     if (trip.calculateTeleportationDistance(station)> THRESHOLD_FOR_TRIPS_LONGER_THAN){
                         NUMBER_OF_TRIPS_LONGER_TAHN++;
                     }
-                    List<UAMVehicle> vehicles = stationVehicleMap.get(station.getId());
+                    List<UAMVehicle> vehicles = originStationVehicleMap.get(station.getId());
                     if (vehicles == null){
                         continue;
                     }
@@ -316,7 +316,7 @@ public class GeneticAlgorithm {
 
 
     private static Map<Id<UAMStation>, List<UAMVehicle>> saveStationVehicleNumber(List<UAMTrip> subTrips) {
-        Map<Id<UAMStation>, List<UAMVehicle>> stationVehicleMap = new HashMap<>();
+        Map<Id<UAMStation>, List<UAMVehicle>> oringinStationVehicleMap = new HashMap<>();
 
 /*        UAMVehicleType vehicleType = new UAMVehicleType(id, capacity, range, horizontalSpeed, verticalSpeed,
                 boardingTime, deboardingTime, turnAroundTime, energyConsumptionVertical, energyConsumptionHorizontal,
@@ -334,12 +334,12 @@ public class GeneticAlgorithm {
             // Get the station ID
             Id<UAMStation> stationId = station.getId();
             // Check if there is already a list for this station ID, if not, create one
-            List<UAMVehicle> vehiclesAtStation = stationVehicleMap.computeIfAbsent(stationId, k -> new ArrayList<>());
+            List<UAMVehicle> vehiclesAtStation = originStationVehicleMap.computeIfAbsent(stationId, k -> new ArrayList<>());
             // Add the new vehicle to the list
             vehiclesAtStation.add(vehicle);
             vehicles.put(vehicle.getId(), vehicle);
             vehicleStationMap.put(vehicle.getId(), station);
-            stationVehicleMap.put(stationId, vehiclesAtStation);
+            originStationVehicleMap.put(stationId, vehiclesAtStation);
         }*/
 
         // save the station's vehicle number for the current time based on the UAMTrips' origin station
@@ -349,14 +349,14 @@ public class GeneticAlgorithm {
             // Get the station ID
             Id<UAMStation> stationId = subTrip.getOriginStation().getId();
             // Check if there is already a list for this station ID, if not, create one
-            List<UAMVehicle> vehiclesAtStation = stationVehicleMap.computeIfAbsent(stationId, k -> new ArrayList<>());
+            List<UAMVehicle> vehiclesAtStation = oringinStationVehicleMap.computeIfAbsent(stationId, k -> new ArrayList<>());
             // Add the new vehicle to the list
             vehiclesAtStation.add(vehicle);
             vehicles.put(vehicle.getId(), vehicle);
             vehicleStationMap.put(vehicle.getId(), subTrip.getOriginStation());
-            stationVehicleMap.put(stationId, vehiclesAtStation);
+            oringinStationVehicleMap.put(stationId, vehiclesAtStation);
         }
-        return stationVehicleMap;
+        return oringinStationVehicleMap;
     }
     // vehicle creator function
     private static UAMVehicle createVehicle(UAMStation uamStation, UAMVehicleType vehicleType) {
