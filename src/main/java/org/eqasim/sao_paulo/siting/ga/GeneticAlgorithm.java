@@ -29,10 +29,12 @@ public class GeneticAlgorithm {
     private static final double BETA_NONE_POOLED_TRIP_EARLIER_DEPARTURE = - 0.25;
 
     private static final int VEHICLE_CAPACITY = 4; // Vehicle capacity
-    private static final double SEARCH_RADIUS_ORIGIN = 1000; // search radius for origin station
-    private static final double SEARCH_RADIUS_DESTINATION = 1000; // search radius for destination station
+    private static final double SEARCH_RADIUS_ORIGIN = 2000; // search radius for origin station
+    private static final double SEARCH_RADIUS_DESTINATION = 2000; // search radius for destination station
 
     private static final int VALUE_FOR_NO_VEHICLE_AVAILABLE = -1; // For example, using -1 as an indicator of no vehicle available
+    private static final double END_SERVICE_TIME_OF_THE_DAY = 3600*36; // End service time of the day
+    private static int FIRST_UAM_VEHICLE_ID = 1;
 
     // Assuming these arrays are initialized elsewhere in your code:
     private static double[] flightDistances; // Distances for each trip
@@ -124,6 +126,10 @@ public class GeneticAlgorithm {
 
     private static void assignAvailableVehicle(int i, int[] individual) {
         Map<UAMVehicle, Integer> vehicleCapacityMap = tripVehicleMap.get(subTrips.get(i).getTripId());
+        //handle the case when there is no available vehicle
+        if (vehicleCapacityMap == null) {
+            throw new IllegalArgumentException("No available vehicle for the trip, Please increase the search radius or add more vehicles to the station.");
+        }
         List<UAMVehicle> vehicleList = vehicleCapacityMap.entrySet().stream()
                 .filter(entry -> entry.getValue() > 0)
                 .map(Map.Entry::getKey)
@@ -294,9 +300,6 @@ public class GeneticAlgorithm {
     private static Map<Id<UAMStation>, List<UAMVehicle>> saveStationVehicleNumber(List<UAMTrip> subTrips) {
         Map<Id<UAMStation>, List<UAMVehicle>> stationVehicleMap = new HashMap<>();
 
-        // initialize the map with the station and vehicle instances
-        int intId = 1;
-
 /*        UAMVehicleType vehicleType = new UAMVehicleType(id, capacity, range, horizontalSpeed, verticalSpeed,
                 boardingTime, deboardingTime, turnAroundTime, energyConsumptionVertical, energyConsumptionHorizontal,
                 maximumCharge);*/
@@ -306,21 +309,24 @@ public class GeneticAlgorithm {
                 0, 0, 0);
         vehicleTypes.put(vehicleTypeId, vehicleType);
 
+        // Loop through the stations so that we can assign at least 1 to each station before we assign more vehicles based on the demand
+        for (UAMStation station : stations.values()) {
+            UAMVehicle vehicle = createVehicle(station, vehicleTypes.get(vehicleTypeId));
+
+            // Get the station ID
+            Id<UAMStation> stationId = station.getId();
+            // Check if there is already a list for this station ID, if not, create one
+            List<UAMVehicle> vehiclesAtStation = stationVehicleMap.computeIfAbsent(stationId, k -> new ArrayList<>());
+            // Add the new vehicle to the list
+            vehiclesAtStation.add(vehicle);
+            vehicles.put(vehicle.getId(), vehicle);
+            vehicleStationMap.put(vehicle.getId(), station);
+            stationVehicleMap.put(stationId, vehiclesAtStation);
+        }
+
         // save the station's vehicle number for the current time based on the UAMTrips' origin station
         for (UAMTrip subTrip : subTrips) {
-            // Create a builder instance
-            ImmutableDvrpVehicleSpecification.Builder builder = ImmutableDvrpVehicleSpecification.newBuilder();
-            // Set the properties of the vehicle
-            builder.id(Id.create(String.valueOf(intId++), DvrpVehicle.class));
-            builder.startLinkId(subTrip.getOriginStation().getLocationLink().getId());
-            builder.capacity(VEHICLE_CAPACITY);
-            builder.serviceBeginTime(BUFFER_START_TIME);
-            builder.serviceEndTime(3600);
-            // Build the vehicle specification
-            ImmutableDvrpVehicleSpecification vehicleSpecification = builder.build();
-
-            UAMVehicle vehicle = new UAMVehicle(vehicleSpecification,
-                    subTrip.getOriginStation().getLocationLink(), subTrip.getOriginStation().getId(), vehicleTypes.get(vehicleTypeId));
+            UAMVehicle vehicle = createVehicle(subTrip.getOriginStation(), vehicleTypes.get(vehicleTypeId));
 
             // Get the station ID
             Id<UAMStation> stationId = subTrip.getOriginStation().getId();
@@ -330,8 +336,25 @@ public class GeneticAlgorithm {
             vehiclesAtStation.add(vehicle);
             vehicles.put(vehicle.getId(), vehicle);
             vehicleStationMap.put(vehicle.getId(), subTrip.getOriginStation());
+            stationVehicleMap.put(stationId, vehiclesAtStation);
         }
         return stationVehicleMap;
+    }
+    // vehicle creator function
+    private static UAMVehicle createVehicle(UAMStation uamStation, UAMVehicleType vehicleType) {
+        // Create a builder instance
+        ImmutableDvrpVehicleSpecification.Builder builder = ImmutableDvrpVehicleSpecification.newBuilder();
+        // Set the properties of the vehicle
+        builder.id(Id.create(String.valueOf(FIRST_UAM_VEHICLE_ID++), DvrpVehicle.class));
+        builder.startLinkId(uamStation.getLocationLink().getId());
+        builder.capacity(VEHICLE_CAPACITY);
+        builder.serviceBeginTime(BUFFER_START_TIME);
+        builder.serviceEndTime(END_SERVICE_TIME_OF_THE_DAY);
+        // Build the vehicle specification
+        ImmutableDvrpVehicleSpecification vehicleSpecification = builder.build();
+
+        return new UAMVehicle(vehicleSpecification,
+                uamStation.getLocationLink(), uamStation.getId(), vehicleType);
     }
 
 }
