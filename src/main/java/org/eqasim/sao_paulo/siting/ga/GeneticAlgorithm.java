@@ -278,13 +278,13 @@ public class GeneticAlgorithm {
         // Calculate fitness per vehicle
         for (Map.Entry<Integer, List<UAMTrip>> entry : vehicleAssignments.entrySet()) {
             List<UAMTrip> trips = entry.getValue();
-            UAMStation stationOfVehicle = vehicleOriginStationMap.get(Id.create(entry.getKey().toString(), DvrpVehicle.class));
+            UAMStation originStationOfVehicle = vehicleOriginStationMap.get(Id.create(entry.getKey().toString(), DvrpVehicle.class));
 
             // safety check
             if (trips.isEmpty()) continue;
             if (trips.size() == 1){
                 UAMTrip trip = trips.get(0);
-                double additionalTravelTime = trip.calculateAccessTeleportationTime(stationOfVehicle) - trip.calculateAccessTeleportationDistance(trip.getOriginStation());
+                double additionalTravelTime = trip.calculateAccessTeleportationTime(originStationOfVehicle) - trip.calculateAccessTeleportationDistance(trip.getOriginStation());
                 if(additionalTravelTime > 0) {
                     fitness += BETA * additionalTravelTime;
                 } else {
@@ -296,18 +296,18 @@ public class GeneticAlgorithm {
             // Find the base trip (the trip with the earliest arrival time at the departure UAM station)
             UAMTrip baseTrip = trips.get(0);
             for (UAMTrip trip : trips) {
-                double accessTimeOfBaseTrip = baseTrip.calculateAccessTeleportationTime(stationOfVehicle);
-                double accessTimeOfPooledTrip = trip.calculateAccessTeleportationTime(stationOfVehicle);
+                double accessTimeOfBaseTrip = baseTrip.calculateAccessTeleportationTime(originStationOfVehicle);
+                double accessTimeOfPooledTrip = trip.calculateAccessTeleportationTime(originStationOfVehicle);
                 if ((trip.getDepartureTime() + accessTimeOfPooledTrip) >= (baseTrip.getDepartureTime() + accessTimeOfBaseTrip)) {
                     baseTrip = trip;
                 }
             }
 
-            double boardingTimeForAllTrips = baseTrip.getDepartureTime() + baseTrip.calculateAccessTeleportationTime(stationOfVehicle);
+            double boardingTimeForAllTrips = baseTrip.getDepartureTime() + baseTrip.calculateAccessTeleportationTime(originStationOfVehicle);
             // Calculate fitness based on the proposed pooling option
             for (UAMTrip trip : trips) {
                 if(trip.getTripId().equals(baseTrip.getTripId())){
-/*                    double originalArrivalTimeForBaseTrip = baseTrip.getDepartureTime() + baseTrip.calculateTeleportationDistance(stationOfVehicle);
+/*                    double originalArrivalTimeForBaseTrip = baseTrip.getDepartureTime() + baseTrip.calculateTeleportationDistance(originStationOfVehicle);
                     double additionalTravelTime = originalArrivalTimeForBaseTrip;
                     fitness += BETA * additionalTravelTime;*/
                     continue;
