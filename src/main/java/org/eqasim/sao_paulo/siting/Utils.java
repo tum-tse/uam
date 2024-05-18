@@ -250,6 +250,11 @@ public class Utils {
         public double calculateEgressTeleportationDistance(UAMStation station) {
             return Math.sqrt(Math.pow(destX - station.getLocationLink().getCoord().getX(), 2) + Math.pow(destY - station.getLocationLink().getCoord().getY(), 2));
         }
+        // TODO: Use MATSim to calculate the routes and travel times
+        public double calculateEgressTeleportationTime(UAMStation station) {
+            double distance = calculateEgressTeleportationDistance(station);
+            return distance / TELEPORTATION_SPEED;
+        }
 
         // getDepartureTime
         public double getDepartureTime() {

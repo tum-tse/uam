@@ -279,17 +279,20 @@ public class GeneticAlgorithm {
         for (Map.Entry<Integer, List<UAMTrip>> entry : vehicleAssignments.entrySet()) {
             List<UAMTrip> trips = entry.getValue();
             UAMStation originStationOfVehicle = vehicleOriginStationMap.get(Id.create(entry.getKey().toString(), DvrpVehicle.class));
+            UAMStation destinationStationOfVehicle = vehicleDestinationStationMap.get(Id.create(entry.getKey().toString(), DvrpVehicle.class));
 
             // safety check
             if (trips.isEmpty()) continue;
             if (trips.size() == 1){
                 UAMTrip trip = trips.get(0);
-                double additionalTravelTimeDueToAccessMatching = trip.calculateAccessTeleportationTime(originStationOfVehicle) - trip.calculateAccessTeleportationDistance(trip.getOriginStation());
+                double additionalTravelTimeDueToAccessMatching = trip.calculateAccessTeleportationTime(originStationOfVehicle) - trip.calculateAccessTeleportationTime(trip.getOriginStation());
                 if(additionalTravelTimeDueToAccessMatching > 0) {
                     fitness += BETA * additionalTravelTimeDueToAccessMatching;
                 } else {
                     fitness += BETA_NONE_POOLED_TRIP_EARLIER_DEPARTURE * additionalTravelTimeDueToAccessMatching;
                 }
+                double additionalTravelTimeDueToEgressMatching = trip.calculateEgressTeleportationTime(destinationStationOfVehicle) - trip.calculateEgressTeleportationTime(trip.getDestinationStation());
+                fitness += BETA * additionalTravelTimeDueToEgressMatching;
                 continue;
             }
 
@@ -307,7 +310,7 @@ public class GeneticAlgorithm {
             // Calculate fitness based on the proposed pooling option
             for (UAMTrip trip : trips) {
                 if(trip.getTripId().equals(baseTrip.getTripId())){
-/*                    double originalArrivalTimeForBaseTrip = baseTrip.getDepartureTime() + baseTrip.calculateTeleportationDistance(originStationOfVehicle);
+/*                    double originalArrivalTimeForBaseTrip = baseTrip.getDepartureTime() + baseTrip.calculateTeleportationTime(originStationOfVehicle);
                     double additionalTravelTimeDueToAccessMatching = originalArrivalTimeForBaseTrip;
                     fitness += BETA * additionalTravelTimeDueToAccessMatching;*/
                     continue;
@@ -321,6 +324,8 @@ public class GeneticAlgorithm {
                     //TODO: reconsider for "negative additional travel time" cases
                 }
                 fitness += ALPHA * savedFlightDistance + BETA * additionalTravelTimeDueToAccessMatching;
+                double additionalTravelTimeDueToEgressMatching = trip.calculateEgressTeleportationTime(destinationStationOfVehicle) - trip.calculateEgressTeleportationTime(trip.getDestinationStation());
+                fitness += BETA * additionalTravelTimeDueToEgressMatching;
             }
         }
 
@@ -391,3 +396,4 @@ public class GeneticAlgorithm {
     }
 
 }
+//TODO: We have not consider the flight route change for the pooled trips yet. Flight time change will affect the travel time of the trips. Flight distance change will affect the savedFlightDistance of pooled trips and also the FlightDistanceChange of non-pooled trips.
