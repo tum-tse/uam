@@ -14,7 +14,6 @@ import net.bhl.matsim.uam.infrastructure.UAMStation;
 import net.bhl.matsim.uam.infrastructure.readers.UAMXMLReader;
 import net.bhl.matsim.uam.infrastructure.UAMVehicle;
 import org.matsim.contrib.dvrp.fleet.DvrpVehicle;
-import org.matsim.contrib.dvrp.fleet.FleetSpecificationImpl;
 import org.matsim.api.core.v01.Id;
 import org.matsim.api.core.v01.network.Network;
 import org.matsim.core.network.NetworkUtils;
@@ -23,7 +22,7 @@ import org.matsim.core.network.io.MatsimNetworkReader;
 public class Utils {
     private static final double SEARCH_RADIUS = 400; // Radius in meters for nearby station search
     private static final int UAM_CAPACITY = 4; // Maximum number of seats in a UAM vehicle
-    private static final double TELEPORTATION_SPEED = 20/3.6; // Walking speed in meters per second
+    private static final double TELEPORTATION_SPEED = 30/3.6; // Teleportation speed in meters per second
 
     private static final String NULL_VERTIPORT = "NULL_Vertiport";
 
@@ -147,7 +146,7 @@ public class Utils {
         List<List<UAMTrip>> finalGroups = new ArrayList<>();
         for (List<UAMTrip> group : listOfListsOfTrips) {
             if (group.size() > UAM_CAPACITY) {
-                group.sort(Comparator.comparingDouble(t -> t.walkingTimeToPooledStation)); // Prioritize by earliest walking time
+                group.sort(Comparator.comparingDouble(t -> t.accessTimeToPooledStation)); // Prioritize by earliest access time
                 finalGroups.add(new ArrayList<>(group.subList(0, UAM_CAPACITY)));
             } else {
                 finalGroups.add(group);
@@ -195,7 +194,7 @@ public class Utils {
 
     private static void writePoolingResultsToCSV(List<List<UAMTrip>> pooledGroups, String filePath) throws FileNotFoundException {
         try (PrintWriter pw = new PrintWriter(new File(filePath))) {
-            pw.println("Group ID,Trip ID,Origin Station ID,Destination Station ID,Departure Time,Arrival Time at Station,Purpose,Income,Walking Time to Station,Total Trips in Group");
+            pw.println("Group ID,Trip ID,Origin Station ID,Destination Station ID,Departure Time,Arrival Time at Station,Purpose,Income,Access Time to Station,Total Trips in Group");
             int groupID = 1;
             for (List<UAMTrip> group : pooledGroups) {
                 for (UAMTrip trip : group) {
@@ -205,10 +204,10 @@ public class Utils {
                             trip.origStation.getId().toString(),
                             trip.destStation.getId().toString(),
                             trip.departureTime,
-                            trip.departureTime - trip.walkingTimeToPooledStation, // Arrival time at station
+                            trip.departureTime - trip.accessTimeToPooledStation, // Arrival time at station
                             trip.purpose,
                             trip.income,
-                            trip.walkingTimeToPooledStation,
+                            trip.accessTimeToPooledStation,
                             group.size()));
                 }
                 groupID++;
@@ -221,7 +220,7 @@ public class Utils {
         private final double originX, originY, destX, destY, departureTime, flightDistance;
         private final UAMStation origStation, destStation; // Changed to Integer to handle null values
         private final String purpose, income;
-        private double walkingTimeToPooledStation; // Time to walk to the station
+        private double accessTimeToPooledStation; // Time for access to the station
 
         UAMTrip(String tripId, double originX, double originY, double destX, double destY, double departureTime, double flightDistance, UAMStation origStation, UAMStation destStation, String purpose, String income) {
             this.tripId = tripId;
@@ -244,8 +243,8 @@ public class Utils {
         // TODO: Use MATSim to calculate the routes and travel times
         public double calculateTeleportationTime(UAMStation station) {
             double distance = calculateTeleportationDistance(station);
-            walkingTimeToPooledStation = distance / TELEPORTATION_SPEED;
-            return walkingTimeToPooledStation;
+            accessTimeToPooledStation = distance / TELEPORTATION_SPEED;
+            return accessTimeToPooledStation;
         }
 
         // getDepartureTime
@@ -267,6 +266,10 @@ public class Utils {
         //getTripId
         public String getTripId() {
             return tripId;
+        }
+        //getFlightDistance
+        public double getFlightDistance() {
+            return flightDistance;
         }
     }
 
