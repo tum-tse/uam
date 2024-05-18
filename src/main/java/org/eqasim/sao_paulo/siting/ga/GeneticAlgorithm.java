@@ -27,6 +27,7 @@ public class GeneticAlgorithm {
     private static final double ALPHA = 1.0; // Weight for saved flight distances
     private static final double BETA = - 0.5; // Weight for additional travel time
     private static final double BETA_NONE_POOLED_TRIP_EARLIER_DEPARTURE = - 0.1;
+    private static final double PELNALTY_FOR_VEHICLE_CAPACITY_VIOLATION = 1000;
 
     private static final int VEHICLE_CAPACITY = 4; // Vehicle capacity
     private static final double SEARCH_RADIUS_ORIGIN = 200000; // search radius for origin station
@@ -234,6 +235,7 @@ public class GeneticAlgorithm {
         return Arrays.copyOf(best, best.length); // Return a copy of the best individual
     }
 
+    //TODO: consider to repair the solution if it is not feasible due to the violation of vehicle capacity constraint
     // Crossover - Single point crossover //TODO: Implement other types of crossover instead of single point
     private static int[] crossover(int[] parent1, int[] parent2) {
         int[] child = new int[parent1.length];
@@ -326,6 +328,10 @@ public class GeneticAlgorithm {
                 fitness += ALPHA * savedFlightDistance + BETA * additionalTravelTimeDueToAccessMatching;
                 double additionalTravelTimeDueToEgressMatching = trip.calculateEgressTeleportationTime(destinationStationOfVehicle) - trip.calculateEgressTeleportationTime(trip.getDestinationStation());
                 fitness += BETA * additionalTravelTimeDueToEgressMatching;
+            }
+            //TODO: add penalty for the case when vehicle capacity is violated
+            if(vehicles.size()>VEHICLE_CAPACITY){
+                fitness += PELNALTY_FOR_VEHICLE_CAPACITY_VIOLATION * (vehicles.size()-VEHICLE_CAPACITY);
             }
         }
 
