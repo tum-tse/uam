@@ -29,12 +29,16 @@ public class GeneticAlgorithm {
     private static final double BETA_NONE_POOLED_TRIP_EARLIER_DEPARTURE = - 0.25;
 
     private static final int VEHICLE_CAPACITY = 4; // Vehicle capacity
-    private static final double SEARCH_RADIUS_ORIGIN = 2000; // search radius for origin station
-    private static final double SEARCH_RADIUS_DESTINATION = 2000; // search radius for destination station
+    private static final double SEARCH_RADIUS_ORIGIN = 200000; // search radius for origin station
+    private static final double SEARCH_RADIUS_DESTINATION = 200000; // search radius for destination station
 
     private static final int VALUE_FOR_NO_VEHICLE_AVAILABLE = -1; // For example, using -1 as an indicator of no vehicle available
     private static final double END_SERVICE_TIME_OF_THE_DAY = 3600*36; // End service time of the day
     private static int FIRST_UAM_VEHICLE_ID = 1;
+
+    private static final int THRESHOLD_FOR_TRIPS_LONGER_THAN = 15000;
+    private static final String THRESHOLD_FOR_TRIPS_LONGER_THAN_STRING = String.valueOf(THRESHOLD_FOR_TRIPS_LONGER_THAN);
+    private static int NUMBER_OF_TRIPS_LONGER_TAHN = 0;
 
     // Assuming these arrays are initialized elsewhere in your code:
     private static double[] flightDistances; // Distances for each trip
@@ -69,6 +73,8 @@ public class GeneticAlgorithm {
             population = evolvePopulation(population);
             System.out.println("Generation " + gen + ": Best fitness = " + findBestFitness(population));
         }
+        // Print the NUMBER_OF_TRIPS_LONGER_TAHN_1KM
+        System.out.println("Threshold for trips longer than " + THRESHOLD_FOR_TRIPS_LONGER_THAN_STRING + ": " + NUMBER_OF_TRIPS_LONGER_TAHN);
     }
     // Find the best fitness in the current population
     private static double findBestFitness(int[][] population) {
@@ -94,6 +100,9 @@ public class GeneticAlgorithm {
         for (UAMTrip trip : subTrips) {
             for (UAMStation station : stations.values()) {
                 if (trip.calculateTeleportationDistance(station) <= SEARCH_RADIUS_ORIGIN) {
+                    if (trip.calculateTeleportationDistance(station)> THRESHOLD_FOR_TRIPS_LONGER_THAN){
+                        NUMBER_OF_TRIPS_LONGER_TAHN++;
+                    }
                     List<UAMVehicle> vehicles = stationVehicleMap.get(station.getId());
                     Map<UAMVehicle, Integer> existingVehicles = tripVehicleMap.getOrDefault(trip.getTripId(), new HashMap<>());
 
@@ -102,6 +111,8 @@ public class GeneticAlgorithm {
                     }
 
                     tripVehicleMap.put(trip.getTripId(), existingVehicles);
+                } else {
+                    throw new IllegalArgumentException("trip.calculateTeleportationDistance(station) <= SEARCH_RADIUS_ORIGIN");
                 }
             }
         }
