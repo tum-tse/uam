@@ -50,9 +50,10 @@ public class GeneticAlgorithm {
 
     private static List<UAMTrip> subTrips = null;
     private static final Map<Id<DvrpVehicle>, UAMVehicle> vehicles = new HashMap<>();
-    private static final Map<Id<DvrpVehicle>, UAMStation> vehicleStationMap = new HashMap<>();
+    private static final Map<Id<DvrpVehicle>, UAMStation> vehicleOriginStationMap = new HashMap<>();
     private static Map<Id<UAMStation>, UAMStation> stations = null;
     private static Map<Id<UAMStation>, List<UAMVehicle>> originStationVehicleMap = null;
+    private static final Map<Id<DvrpVehicle>, UAMStation> vehicleDestinationStationMap = new HashMap<>();
     private static Map<String, Map<UAMVehicle, Integer>> tripVehicleMap = null;
 
     // Main method to run the GA
@@ -265,7 +266,7 @@ public class GeneticAlgorithm {
         // Calculate fitness per vehicle
         for (Map.Entry<Integer, List<UAMTrip>> entry : vehicleAssignments.entrySet()) {
             List<UAMTrip> trips = entry.getValue();
-            UAMStation stationOfVehicle = vehicleStationMap.get(Id.create(entry.getKey().toString(), DvrpVehicle.class));
+            UAMStation stationOfVehicle = vehicleOriginStationMap.get(Id.create(entry.getKey().toString(), DvrpVehicle.class));
 
             // safety check
             if (trips.isEmpty()) continue;
@@ -338,7 +339,7 @@ public class GeneticAlgorithm {
             // Add the new vehicle to the list
             vehiclesAtStation.add(vehicle);
             vehicles.put(vehicle.getId(), vehicle);
-            vehicleStationMap.put(vehicle.getId(), station);
+            vehicleOriginStationMap.put(vehicle.getId(), station);
             originStationVehicleMap.put(stationId, vehiclesAtStation);
         }*/
 
@@ -353,7 +354,7 @@ public class GeneticAlgorithm {
             // Add the new vehicle to the list
             vehiclesAtStation.add(vehicle);
             vehicles.put(vehicle.getId(), vehicle);
-            vehicleStationMap.put(vehicle.getId(), subTrip.getOriginStation());
+            vehicleOriginStationMap.put(vehicle.getId(), subTrip.getOriginStation());
             oringinStationVehicleMap.put(stationId, vehiclesAtStation);
         }
         return oringinStationVehicleMap;
