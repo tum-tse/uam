@@ -100,8 +100,8 @@ public class GeneticAlgorithm {
         Map<String, Map<UAMVehicle, Integer>> tripVehicleMap = new HashMap<>();
         for (UAMTrip trip : subTrips) {
             for (UAMStation station : stations.values()) {
-                if (trip.calculateTeleportationDistance(station) <= SEARCH_RADIUS_ORIGIN) {
-                    if (trip.calculateTeleportationDistance(station)> THRESHOLD_FOR_TRIPS_LONGER_THAN){
+                if (trip.calculateAccessTeleportationDistance(station) <= SEARCH_RADIUS_ORIGIN) {
+                    if (trip.calculateAccessTeleportationDistance(station)> THRESHOLD_FOR_TRIPS_LONGER_THAN){
                         NUMBER_OF_TRIPS_LONGER_TAHN++;
                     }
                     List<UAMVehicle> vehicles = originStationVehicleMap.get(station.getId());
@@ -151,6 +151,18 @@ public class GeneticAlgorithm {
                 .collect(Collectors.toCollection(ArrayList::new));
 
         if (!vehicleList.isEmpty()) {
+            //add egress constraint
+            for (UAMVehicle vehicle: vehicleList){
+                UAMStation destinationStation = vehicleDestinationStationMap.get(vehicle.getId());
+                if (subTrips.get(i).calculateEgressTeleportationDistance(destinationStation) > SEARCH_RADIUS_DESTINATION){
+                    vehicleList.remove(vehicle);
+                }
+            }
+            if (vehicleList.isEmpty()){
+                throw new IllegalArgumentException("No available vehicle for the trip, Please check the reason.");
+            }
+
+            //add access constraint
             int vehicleIndex = rand.nextInt(vehicleList.size());
             UAMVehicle selectedVehicle = vehicleList.get(vehicleIndex);
             Integer currentCapacity = vehicleCapacityMap.get(selectedVehicle);
@@ -272,7 +284,7 @@ public class GeneticAlgorithm {
             if (trips.isEmpty()) continue;
             if (trips.size() == 1){
                 UAMTrip trip = trips.get(0);
-                double additionalTravelTime = trip.calculateTeleportationTime(stationOfVehicle) - trip.calculateTeleportationDistance(trip.getOriginStation());
+                double additionalTravelTime = trip.calculateAccessTeleportationTime(stationOfVehicle) - trip.calculateAccessTeleportationDistance(trip.getOriginStation());
                 if(additionalTravelTime > 0) {
                     fitness += BETA * additionalTravelTime;
                 } else {
@@ -284,14 +296,14 @@ public class GeneticAlgorithm {
             // Find the base trip (the trip with the earliest arrival time at the departure UAM station)
             UAMTrip baseTrip = trips.get(0);
             for (UAMTrip trip : trips) {
-                double accessTimeOfBaseTrip = baseTrip.calculateTeleportationTime(stationOfVehicle);
-                double accessTimeOfPooledTrip = trip.calculateTeleportationTime(stationOfVehicle);
+                double accessTimeOfBaseTrip = baseTrip.calculateAccessTeleportationTime(stationOfVehicle);
+                double accessTimeOfPooledTrip = trip.calculateAccessTeleportationTime(stationOfVehicle);
                 if ((trip.getDepartureTime() + accessTimeOfPooledTrip) >= (baseTrip.getDepartureTime() + accessTimeOfBaseTrip)) {
                     baseTrip = trip;
                 }
             }
 
-            double boardingTimeForAllTrips = baseTrip.getDepartureTime() + baseTrip.calculateTeleportationTime(stationOfVehicle);
+            double boardingTimeForAllTrips = baseTrip.getDepartureTime() + baseTrip.calculateAccessTeleportationTime(stationOfVehicle);
             // Calculate fitness based on the proposed pooling option
             for (UAMTrip trip : trips) {
                 if(trip.getTripId().equals(baseTrip.getTripId())){
@@ -302,7 +314,7 @@ public class GeneticAlgorithm {
                 }
                 double savedFlightDistance = trip.getFlightDistance();
                 // calculate additional travel time
-                double originalArrivalTimeForThePooledTrip = trip.getDepartureTime() + trip.calculateTeleportationTime(trip.getOriginStation());
+                double originalArrivalTimeForThePooledTrip = trip.getDepartureTime() + trip.calculateAccessTeleportationTime(trip.getOriginStation());
                 double additionalTravelTime = boardingTimeForAllTrips - originalArrivalTimeForThePooledTrip;
                 if (additionalTravelTime < 0){
                     additionalTravelTime = 0;
@@ -340,6 +352,7 @@ public class GeneticAlgorithm {
             vehiclesAtStation.add(vehicle);
             vehicles.put(vehicle.getId(), vehicle);
             vehicleOriginStationMap.put(vehicle.getId(), station);
+            vehicleDestinationStationMap.put(vehicle.getId(), ?);
             originStationVehicleMap.put(stationId, vehiclesAtStation);
         }*/
 
@@ -355,6 +368,7 @@ public class GeneticAlgorithm {
             vehiclesAtStation.add(vehicle);
             vehicles.put(vehicle.getId(), vehicle);
             vehicleOriginStationMap.put(vehicle.getId(), subTrip.getOriginStation());
+            vehicleDestinationStationMap.put(vehicle.getId(), subTrip.getDestinationStation());
             oringinStationVehicleMap.put(stationId, vehiclesAtStation);
         }
         return oringinStationVehicleMap;

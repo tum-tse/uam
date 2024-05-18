@@ -119,9 +119,9 @@ public class Utils {
         Map<String, Set<UAMTrip>> potentialGroups = new HashMap<>();
         for (UAMTrip trip : trips) { // pooled trip candidate
             for (UAMTrip otherTrip : trips) { // base trip
-                double accessTimeToStationForBaseTrip = otherTrip.calculateTeleportationTime(otherTrip.origStation);
-                double accessTimeToOldStationForPoolTrip = trip.calculateTeleportationTime(trip.origStation);
-                double accessTimeToNewStationForPoolTrip = trip.calculateTeleportationTime(otherTrip.origStation);
+                double accessTimeToStationForBaseTrip = otherTrip.calculateAccessTeleportationTime(otherTrip.origStation);
+                double accessTimeToOldStationForPoolTrip = trip.calculateAccessTeleportationTime(trip.origStation);
+                double accessTimeToNewStationForPoolTrip = trip.calculateAccessTeleportationTime(otherTrip.origStation);
                 double arrivalTimeDifference = (otherTrip.departureTime+accessTimeToStationForBaseTrip - (trip.departureTime+accessTimeToNewStationForPoolTrip));
                 if (trip != otherTrip && areStationsNearby(trip.originX, trip.getOriginY(), otherTrip.origStation) &&
                     areStationsNearby(trip.destX, trip.destY, otherTrip.destStation) &&
@@ -178,9 +178,9 @@ public class Utils {
                 if (!pooledTrip.equals(baseTrip)) {
                     savedDistance += baseTrip.flightDistance;
                     pooledTrips++;
-                    double accessTimeToStationForBaseTrip = baseTrip.calculateTeleportationTime(baseTrip.origStation);
-                    double accessTimeToOldStationForPoolTrip = pooledTrip.calculateTeleportationTime(pooledTrip.origStation);
-                    double accessTimeToNewStationForPoolTrip = pooledTrip.calculateTeleportationTime(baseTrip.origStation);
+                    double accessTimeToStationForBaseTrip = baseTrip.calculateAccessTeleportationTime(baseTrip.origStation);
+                    double accessTimeToOldStationForPoolTrip = pooledTrip.calculateAccessTeleportationTime(pooledTrip.origStation);
+                    double accessTimeToNewStationForPoolTrip = pooledTrip.calculateAccessTeleportationTime(baseTrip.origStation);
                     totalIncreasedWaitTime += (baseTrip.getDepartureTime() + accessTimeToStationForBaseTrip) - (pooledTrip.getDepartureTime() + accessTimeToOldStationForPoolTrip);
                 }
             }
@@ -237,14 +237,18 @@ public class Utils {
         }
 
         // TODO: Use MATSim to calculate the routes and travel distances
-        public double calculateTeleportationDistance(UAMStation station) {
+        public double calculateAccessTeleportationDistance(UAMStation station) {
             return Math.sqrt(Math.pow(originX - station.getLocationLink().getCoord().getX(), 2) + Math.pow(originY - station.getLocationLink().getCoord().getY(), 2));
         }
         // TODO: Use MATSim to calculate the routes and travel times
-        public double calculateTeleportationTime(UAMStation station) {
-            double distance = calculateTeleportationDistance(station);
+        public double calculateAccessTeleportationTime(UAMStation station) {
+            double distance = calculateAccessTeleportationDistance(station);
             accessTimeToPooledStation = distance / TELEPORTATION_SPEED;
             return accessTimeToPooledStation;
+        }
+        // TODO: Use MATSim to calculate the routes and travel distances
+        public double calculateEgressTeleportationDistance(UAMStation station) {
+            return Math.sqrt(Math.pow(destX - station.getLocationLink().getCoord().getX(), 2) + Math.pow(destY - station.getLocationLink().getCoord().getY(), 2));
         }
 
         // getDepartureTime
@@ -262,6 +266,10 @@ public class Utils {
         //getOriginStation
         public UAMStation getOriginStation() {
             return origStation;
+        }
+        //getDestinationStation
+        public UAMStation getDestinationStation() {
+            return destStation;
         }
         //getTripId
         public String getTripId() {
