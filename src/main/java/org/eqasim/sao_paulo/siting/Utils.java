@@ -255,6 +255,10 @@ public class Utils {
             double distance = calculateEgressTeleportationDistance(station);
             return distance / TELEPORTATION_SPEED;
         }
+        // TODO: Use MATSim to calculate the routes and travel distances
+        public double calculateFlightDistance(UAMStation originStation, UAMStation destStation) {
+            return Math.sqrt(Math.pow(originStation.getLocationLink().getCoord().getX() - destStation.getLocationLink().getCoord().getX(), 2) + Math.pow(originStation.getLocationLink().getCoord().getY() - destStation.getLocationLink().getCoord().getY(), 2));
+        }
 
         // getDepartureTime
         public double getDepartureTime() {
