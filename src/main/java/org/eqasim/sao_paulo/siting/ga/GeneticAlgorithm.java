@@ -88,8 +88,9 @@ public class GeneticAlgorithm {
             System.out.println("Generation " + gen + ": Best fitness = " + findBestFitness(population));
         }
 
-        // Output best solution details
-        System.out.println("Best solution across iterations: " + Arrays.toString(solutionsHeap.peek().getSolution()));
+        // Find the best feasible solution at the end of GA execution without altering the original solutions heap
+        int[] bestFeasibleSolution = findFeasibleSolution(solutionsHeap);
+        System.out.println("Best feasible solution: " + Arrays.toString(bestFeasibleSolution));
 
         // Print the NUMBER_OF_TRIPS_LONGER_TAHN_1KM
         System.out.println("Threshold for trips longer than " + THRESHOLD_FOR_TRIPS_LONGER_THAN_STRING + ": " + NUMBER_OF_TRIPS_LONGER_TAHN);
@@ -122,7 +123,6 @@ public class GeneticAlgorithm {
             }
         }
     }
-
     // SolutionFitnessPair class to hold individual solutions and their fitness
     private static class SolutionFitnessPair {
         private int[] solution;
@@ -140,6 +140,36 @@ public class GeneticAlgorithm {
         public double getFitness() {
             return fitness;
         }
+    }
+    // Method to find the first feasible solution from the priority queue without altering the original heap
+    private static int[] findFeasibleSolution(PriorityQueue<SolutionFitnessPair> originalSolutionsHeap) {
+        // Create a new priority queue that is a copy of the original but sorted in descending order by fitness
+        PriorityQueue<SolutionFitnessPair> solutionsHeapCopy = new PriorityQueue<>(
+                Comparator.comparingDouble(SolutionFitnessPair::getFitness).reversed()
+        );
+        solutionsHeapCopy.addAll(originalSolutionsHeap);
+
+        // Iterate through the copied solutions heap to find a feasible solution
+        while (!solutionsHeapCopy.isEmpty()) {
+            int[] candidateSolution = solutionsHeapCopy.poll().getSolution();
+            if (isFeasible(candidateSolution)) {
+                return candidateSolution;
+            }
+        }
+        throw new IllegalStateException("No feasible solution found in the entire population");
+    }
+    // Helper method to check if a solution violates vehicle capacity constraints
+    private static boolean isFeasible(int[] solution) {
+        Map<Integer, Integer> vehicleLoadCount = new HashMap<>();
+        for (int vehicleId : solution) {
+            vehicleLoadCount.put(vehicleId, vehicleLoadCount.getOrDefault(vehicleId, 0) + 1);
+        }
+        for (int load : vehicleLoadCount.values()) {
+            if (load > VEHICLE_CAPACITY) {
+                return false;
+            }
+        }
+        return true;
     }
 
     private static ArrayList<UAMTrip> extractSubTrips(List<UAMTrip> uamTrips) {
@@ -488,6 +518,5 @@ public class GeneticAlgorithm {
     }
 
 }
-//TODO: need to check if the best solution violates the hard constraint or not
 //TODO: Need use the best solution starting from the crossover_disable_after iteration to generate new solutions for remaining iterations
 //TODO: Need to print the performance indicators for the best solution of each iteration. Especially, we want to observe the indicators for the trips has the extremely bad performance
