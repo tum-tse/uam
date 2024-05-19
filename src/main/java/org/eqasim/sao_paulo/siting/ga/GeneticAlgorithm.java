@@ -51,6 +51,7 @@ public class GeneticAlgorithm {
     private static double[][] egressTimesUpdated; // Updated egress times for each trip and vehicle
     private static double[][] waitingTimes; // Waiting times at the parking station for each trip and vehicle
 
+    private static final PriorityQueue<SolutionFitnessPair> solutionsHeap = new PriorityQueue<>(Comparator.comparingDouble(SolutionFitnessPair::getFitness));
     private static List<UAMTrip> subTrips = null;
     private static final Map<Id<DvrpVehicle>, UAMVehicle> vehicles = new HashMap<>();
     private static final Map<Id<DvrpVehicle>, UAMStation> vehicleOriginStationMap = new HashMap<>();
@@ -70,13 +71,26 @@ public class GeneticAlgorithm {
         originStationVehicleMap = saveStationVehicleNumber(subTrips);
         tripVehicleMap = findNearbyVehiclesToTrips(subTrips, originStationVehicleMap);
 
-        // GA
+        // Initialize population and solutions heap in the first generation
         int[][] population = initializePopulation();
-        for (int gen = 0; gen < MAX_GENERATIONS; gen++) {
+        if (solutionsHeap.isEmpty()) {
+            for (int[] individual : population) {
+                double fitness = calculateFitness(individual);
+                solutionsHeap.add(new SolutionFitnessPair(individual, fitness));
+            }
+        }
+
+        // GA iterations
+        for (int gen = 1; gen < MAX_GENERATIONS; gen++) {
             resetVehicleCapacities(tripVehicleMap); // Reset the vehicle capacity at the beginning of each GA iteration since capacity of vehicles will be updated during each iteration
             population = evolvePopulation(population, gen);
+            updateSolutionsHeap(population);
             System.out.println("Generation " + gen + ": Best fitness = " + findBestFitness(population));
         }
+
+        // Output best solution details
+        System.out.println("Best solution across iterations: " + Arrays.toString(solutionsHeap.peek().getSolution()));
+
         // Print the NUMBER_OF_TRIPS_LONGER_TAHN_1KM
         System.out.println("Threshold for trips longer than " + THRESHOLD_FOR_TRIPS_LONGER_THAN_STRING + ": " + NUMBER_OF_TRIPS_LONGER_TAHN);
     }
@@ -90,6 +104,36 @@ public class GeneticAlgorithm {
             }
         }
         return bestFitness;
+    }
+
+    // New method to update the solutions heap
+    private static void updateSolutionsHeap(int[][] population) {
+        for (int[] individual : population) {
+            double fitness = calculateFitness(individual);
+            if (fitness > solutionsHeap.peek().getFitness()) {
+                solutionsHeap.poll(); // Remove the worst solution
+                solutionsHeap.add(new SolutionFitnessPair(individual, fitness)); // Add the new better solution
+            }
+        }
+    }
+
+    // SolutionFitnessPair class to hold individual solutions and their fitness
+    private static class SolutionFitnessPair {
+        private int[] solution;
+        private double fitness;
+
+        public SolutionFitnessPair(int[] solution, double fitness) {
+            this.solution = solution;
+            this.fitness = fitness;
+        }
+
+        public int[] getSolution() {
+            return solution;
+        }
+
+        public double getFitness() {
+            return fitness;
+        }
     }
 
     private static ArrayList<UAMTrip> extractSubTrips(List<UAMTrip> uamTrips) {
@@ -438,6 +482,6 @@ public class GeneticAlgorithm {
     }
 
 }
-//TODO: Need to save the best solution across all iterations and print it at the end of the GA (also need to check if the best solution violates all hard constraints or not)
+//TODO: need to check if the best solution violates all hard constraints or not
 //TODO: Need use the best solution starting from the crossover_disable_after iteration to generate new solutions for remaining iterations
 //TODO: Need to print the performance indicators for the best solution of each iteration. Especially, we want to observe the indicators for the trips has the extremely bad performance
