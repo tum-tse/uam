@@ -27,7 +27,7 @@ public class GeneticAlgorithm {
 
     private static final double ALPHA = 1.0; // Weight for saved flight distances
     private static final double BETA = - 0.5; // Weight for additional travel time
-    private static final double BETA_NONE_POOLED_TRIP_EARLIER_DEPARTURE = - 0.1;
+    private static final double BETA_NONE_POOLED_TRIP_EARLIER_DEPARTURE = - 0.1; //TODO: need to reconsider the value
     private static final double PENALTY_FOR_VEHICLE_CAPACITY_VIOLATION = -1000;
 
     private static final int VEHICLE_CAPACITY = 4; // Vehicle capacity
@@ -205,7 +205,7 @@ public class GeneticAlgorithm {
             int[] parent2 = select(population);
             int[] child;
 
-            if (useCrossover) {
+            if (useCrossover && rand.nextDouble() < CROSSOVER_RATE) {
                 child = crossover(parent1, parent2);
             } else {
                 child = rand.nextBoolean() ? parent1 : parent2; // Skip crossover, use parent directly
@@ -249,16 +249,13 @@ public class GeneticAlgorithm {
     // Crossover - Single point crossover //TODO: Implement other types of crossover instead of single point
     private static int[] crossover(int[] parent1, int[] parent2) {
         int[] child = new int[parent1.length];
-        if (rand.nextDouble() < CROSSOVER_RATE) {
-            int crossoverPoint = rand.nextInt(parent1.length);
-            for (int i = 0; i < crossoverPoint; i++) {
-                child[i] = parent1[i];
-            }
-            for (int i = crossoverPoint; i < parent2.length; i++) {
-                child[i] = parent2[i];
-            }
-        } else {
-            return rand.nextBoolean() ? parent1 : parent2;
+
+        int crossoverPoint = rand.nextInt(parent1.length);
+        for (int i = 0; i < crossoverPoint; i++) {
+            child[i] = parent1[i];
+        }
+        for (int i = crossoverPoint; i < parent2.length; i++) {
+            child[i] = parent2[i];
         }
         return child;
     }
@@ -413,3 +410,4 @@ public class GeneticAlgorithm {
 
 }
 //TODO: We have not consider the flight route change for the pooled trips yet. Flight time change will affect the travel time of the trips. Flight distance change will affect the savedFlightDistance of pooled trips and also the FlightDistanceChange of non-pooled trips.
+//TODO: Need to save the best solution across all iterations and print it at the end of the GA (also need to check if the best solution violates all hard constraints or not)
