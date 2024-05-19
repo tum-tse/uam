@@ -439,4 +439,5 @@ public class GeneticAlgorithm {
 
 }
 //TODO: Need to save the best solution across all iterations and print it at the end of the GA (also need to check if the best solution violates all hard constraints or not)
+//TODO: Need use the best solution starting from the crossover_disable_after iteration to generate new solutions for remaining iterations
 //TODO: Need to print the performance indicators for the best solution of each iteration.
