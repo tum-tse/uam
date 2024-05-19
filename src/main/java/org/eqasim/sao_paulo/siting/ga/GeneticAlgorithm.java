@@ -19,6 +19,7 @@ public class GeneticAlgorithm {
     private static final double MUTATION_RATE = 0.05; // Mutation rate
     private static final double CROSSOVER_RATE = 0.7; // Crossover rate
     private static final int TOURNAMENT_SIZE = 5; // Tournament size for selection
+    private static final int CROSSOVER_DISABLE_AFTER = 80; // New field to control when to stop crossover
     private static final long SEED = 4711; // MATSim default Random Seed
     private static final Random rand = new Random(SEED);
     private static final int BUFFER_START_TIME = 3600*7; // Buffer start time for the first trip
@@ -72,7 +73,7 @@ public class GeneticAlgorithm {
         int[][] population = initializePopulation();
         for (int gen = 0; gen < MAX_GENERATIONS; gen++) {
             resetVehicleCapacities(tripVehicleMap); // Reset the vehicle capacity at the beginning of each GA iteration since capacity of vehicles will be updated during each iteration
-            population = evolvePopulation(population);
+            population = evolvePopulation(population, gen);
             System.out.println("Generation " + gen + ": Best fitness = " + findBestFitness(population));
         }
         // Print the NUMBER_OF_TRIPS_LONGER_TAHN_1KM
@@ -194,14 +195,23 @@ public class GeneticAlgorithm {
         return individual;
     }
 
-    // Evolve population
-    private static int[][] evolvePopulation(int[][] pop) {
+    // Modified evolvePopulation method
+    private static int[][] evolvePopulation(int[][] population, int currentGeneration) {
         int[][] newPop = new int[POP_SIZE][];
+        boolean useCrossover = currentGeneration < CROSSOVER_DISABLE_AFTER;
+
         for (int i = 0; i < POP_SIZE; i++) {
-            int[] parent1 = select(pop);
-            int[] parent2 = select(pop);
-            int[] child = crossover(parent1, parent2);
-            newPop[i] = mutate(child);
+            int[] parent1 = select(population);
+            int[] parent2 = select(population);
+            int[] child;
+
+            if (useCrossover) {
+                child = crossover(parent1, parent2);
+            } else {
+                child = rand.nextBoolean() ? parent1 : parent2; // Skip crossover, use parent directly
+            }
+
+            newPop[i] = mutate(child); // Mutation is always applied
         }
         return newPop;
     }
