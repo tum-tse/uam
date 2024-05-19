@@ -19,7 +19,7 @@ public class GeneticAlgorithm {
     private static final double MUTATION_RATE = 0.05; // Mutation rate
     private static final double CROSSOVER_RATE = 0.7; // Crossover rate
     private static final int TOURNAMENT_SIZE = 5; // Tournament size for selection
-    private static final int CROSSOVER_DISABLE_AFTER = 80; // New field to control when to stop crossover
+    private static final int CROSSOVER_DISABLE_AFTER = 100; // New field to control when to stop crossover
     private static final long SEED = 4711; // MATSim default Random Seed
     private static final Random rand = new Random(SEED);
     private static final int BUFFER_START_TIME = 3600*7; // Buffer start time for the first trip
@@ -440,4 +440,4 @@ public class GeneticAlgorithm {
 }
 //TODO: Need to save the best solution across all iterations and print it at the end of the GA (also need to check if the best solution violates all hard constraints or not)
 //TODO: Need use the best solution starting from the crossover_disable_after iteration to generate new solutions for remaining iterations
-//TODO: Need to print the performance indicators for the best solution of each iteration.
+//TODO: Need to print the performance indicators for the best solution of each iteration. Especially, we want to observe the indicators for the trips has the extremely bad performance
