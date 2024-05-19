@@ -78,6 +78,7 @@ public class GeneticAlgorithm {
                 double fitness = calculateFitness(individual);
                 solutionsHeap.add(new SolutionFitnessPair(individual, fitness));
             }
+            System.out.println("Generation " + "0" + ": Best fitness = " + solutionsHeap.peek().getFitness());
         }
 
         // GA iterations
@@ -89,10 +90,12 @@ public class GeneticAlgorithm {
         }
 
         // Find the best feasible solution at the end of GA execution without altering the original solutions heap
-        int[] bestFeasibleSolution = findFeasibleSolution(solutionsHeap);
+        SolutionFitnessPair bestFeasibleSolutionFitnessPair = findFeasibleSolution(solutionsHeap);
+        int[] bestFeasibleSolution = bestFeasibleSolutionFitnessPair.getSolution();
         System.out.println("Best feasible solution: " + Arrays.toString(bestFeasibleSolution));
+        System.out.println("The fitness of the best feasible solution: " + bestFeasibleSolutionFitnessPair.getFitness());
 
-        // Print the NUMBER_OF_TRIPS_LONGER_TAHN_1KM
+        // Print the NUMBER_OF_TRIPS_LONGER_THAN
         System.out.println("Threshold for trips longer than " + THRESHOLD_FOR_TRIPS_LONGER_THAN_STRING + ": " + NUMBER_OF_TRIPS_LONGER_TAHN);
     }
     // Find the best fitness in the current population
@@ -142,7 +145,7 @@ public class GeneticAlgorithm {
         }
     }
     // Method to find the first feasible solution from the priority queue without altering the original heap
-    private static int[] findFeasibleSolution(PriorityQueue<SolutionFitnessPair> originalSolutionsHeap) {
+    private static SolutionFitnessPair findFeasibleSolution(PriorityQueue<SolutionFitnessPair> originalSolutionsHeap) {
         // Create a new priority queue that is a copy of the original but sorted in descending order by fitness
         PriorityQueue<SolutionFitnessPair> solutionsHeapCopy = new PriorityQueue<>(
                 Comparator.comparingDouble(SolutionFitnessPair::getFitness).reversed()
@@ -151,9 +154,10 @@ public class GeneticAlgorithm {
 
         // Iterate through the copied solutions heap to find a feasible solution
         while (!solutionsHeapCopy.isEmpty()) {
-            int[] candidateSolution = solutionsHeapCopy.poll().getSolution();
+            SolutionFitnessPair solutionPair = solutionsHeapCopy.poll(); // Remove and retrieve the solution with the highest fitness
+            int[] candidateSolution = solutionPair.getSolution();
             if (isFeasible(candidateSolution)) {
-                return candidateSolution;
+                return solutionPair;
             }
         }
         throw new IllegalStateException("No feasible solution found in the entire population");
