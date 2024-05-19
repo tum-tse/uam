@@ -110,9 +110,15 @@ public class GeneticAlgorithm {
     private static void updateSolutionsHeap(int[][] population) {
         for (int[] individual : population) {
             double fitness = calculateFitness(individual);
+            // Only consider adding if the new solution is better than the worst in the heap
             if (fitness > solutionsHeap.peek().getFitness()) {
-                solutionsHeap.poll(); // Remove the worst solution
-                solutionsHeap.add(new SolutionFitnessPair(individual, fitness)); // Add the new better solution
+                if (solutionsHeap.size() > POP_SIZE) {
+                    solutionsHeap.poll(); // Remove the solution with the lowest fitness
+                    throw new IllegalArgumentException("Need to handle the case when the heap size exceeds the population size.");
+                } else {
+                    solutionsHeap.poll(); // Remove the solution with the lowest fitness
+                    solutionsHeap.add(new SolutionFitnessPair(individual, fitness)); // Add the new better solution
+                }
             }
         }
     }
