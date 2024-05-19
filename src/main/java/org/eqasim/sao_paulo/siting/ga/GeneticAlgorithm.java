@@ -300,7 +300,7 @@ public class GeneticAlgorithm {
                 } else {
                     fitness += BETA_NONE_POOLED_TRIP_EARLIER_DEPARTURE * additionalTravelTimeDueToAccessMatching;
                 }
-                double additionalTravelTimeDueToEgressMatching = trip.calculateEgressTeleportationTime(destinationStationOfVehicle) - trip.calculateEgressTeleportationTime(trip.getDestinationStation());
+                double additionalTravelTimeDueToEgressMatching = getAdditionalTravelTimeDueToEgressMatching(trip, destinationStationOfVehicle);
                 fitness += BETA * additionalTravelTimeDueToEgressMatching;
                 continue;
             }
@@ -333,7 +333,7 @@ public class GeneticAlgorithm {
                     //TODO: reconsider for "negative additional travel time" cases
                 }
                 fitness += ALPHA * savedFlightDistance + BETA * additionalTravelTimeDueToAccessMatching;
-                double additionalTravelTimeDueToEgressMatching = trip.calculateEgressTeleportationTime(destinationStationOfVehicle) - trip.calculateEgressTeleportationTime(trip.getDestinationStation());
+                double additionalTravelTimeDueToEgressMatching = getAdditionalTravelTimeDueToEgressMatching(trip, destinationStationOfVehicle);
                 fitness += BETA * additionalTravelTimeDueToEgressMatching;
             }
             //add penalty for the case when vehicle capacity is violated
@@ -343,6 +343,9 @@ public class GeneticAlgorithm {
         }
 
         return fitness;
+    }
+    private static double getAdditionalTravelTimeDueToEgressMatching(UAMTrip trip, UAMStation destinationStationOfVehicle) {
+        return trip.calculateEgressTeleportationTime(destinationStationOfVehicle) - trip.calculateEgressTeleportationTime(trip.getDestinationStation());
     }
 
 
