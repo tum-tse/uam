@@ -410,7 +410,7 @@ public class GeneticAlgorithm {
         if(additionalTravelTimeDueToAccessMatching > 0) {
             fitness += BETA * additionalTravelTimeDueToAccessMatching;
         } else {
-            fitness += BETA_NONE_POOLED_TRIP_EARLIER_DEPARTURE * additionalTravelTimeDueToAccessMatching;
+            //fitness += BETA_NONE_POOLED_TRIP_EARLIER_DEPARTURE * additionalTravelTimeDueToAccessMatching;
         }
         // calculate additional travel time due to egress matching
         double additionalTravelTimeDueToEgressMatching = getAdditionalTravelTimeDueToEgressMatching(trip, destinationStationOfVehicle);
@@ -488,6 +488,6 @@ public class GeneticAlgorithm {
     }
 
 }
-//TODO: need to check if the best solution violates all hard constraints or not
+//TODO: need to check if the best solution violates the hard constraint or not
 //TODO: Need use the best solution starting from the crossover_disable_after iteration to generate new solutions for remaining iterations
 //TODO: Need to print the performance indicators for the best solution of each iteration. Especially, we want to observe the indicators for the trips has the extremely bad performance
