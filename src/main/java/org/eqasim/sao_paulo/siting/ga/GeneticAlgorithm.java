@@ -51,7 +51,7 @@ public class GeneticAlgorithm {
     private static double[][] egressTimesUpdated; // Updated egress times for each trip and vehicle
     private static double[][] waitingTimes; // Waiting times at the parking station for each trip and vehicle
 
-    private static final PriorityQueue<SolutionFitnessPair> solutionsHeap = new PriorityQueue<>(Comparator.comparingDouble(SolutionFitnessPair::getFitness));
+    private static final PriorityQueue<SolutionFitnessPair> solutionsHeap = new PriorityQueue<>(Comparator.comparingDouble(SolutionFitnessPair::getFitness).reversed());
     private static final Map<String, Double> finalSolutionTravelTimeChanges = new HashMap<>(); // Additional field to store travel time change of each trip for the final best feasible solution
     private static List<UAMTrip> subTrips = null;
     private static final Map<Id<DvrpVehicle>, UAMVehicle> vehicles = new HashMap<>();
@@ -104,7 +104,7 @@ public class GeneticAlgorithm {
     }
     // Find the best fitness in the current population
     private static double findBestFitness(int[][] population) {
-        double bestFitness = Double.MIN_VALUE;
+        double bestFitness = -Double.MAX_VALUE;
         for (int[] individual : population) {
             double fitness = calculateFitness(individual, false);
             if (fitness > bestFitness) {
@@ -326,7 +326,7 @@ public class GeneticAlgorithm {
     // Selection - Tournament selection with null check
     private static int[] select(int[][] pop) {
         int[] best = null;
-        double bestFitness = Double.MIN_VALUE;
+        double bestFitness = -Double.MAX_VALUE;
 
         for (int i = 0; i < TOURNAMENT_SIZE; i++) {
             int[] individual = pop[rand.nextInt(POP_SIZE)];
