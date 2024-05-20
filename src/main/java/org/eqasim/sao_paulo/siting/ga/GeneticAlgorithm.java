@@ -39,7 +39,7 @@ public class GeneticAlgorithm {
     private static final double END_SERVICE_TIME_OF_THE_DAY = 3600*36; // End service time of the day
     private static int FIRST_UAM_VEHICLE_ID = 1;
 
-    private static final int THRESHOLD_FOR_TRIPS_LONGER_THAN = 15000;
+    private static final int THRESHOLD_FOR_TRIPS_LONGER_THAN = 2000;
     private static final String THRESHOLD_FOR_TRIPS_LONGER_THAN_STRING = String.valueOf(THRESHOLD_FOR_TRIPS_LONGER_THAN);
     private static int NUMBER_OF_TRIPS_LONGER_TAHN = 0;
 
@@ -53,6 +53,7 @@ public class GeneticAlgorithm {
 
     private static final PriorityQueue<SolutionFitnessPair> solutionsHeap = new PriorityQueue<>(Comparator.comparingDouble(SolutionFitnessPair::getFitness).reversed());
     private static final Map<String, Double> finalSolutionTravelTimeChanges = new HashMap<>(); // Additional field to store travel time change of each trip for the final best feasible solution
+    private static final Map<String, Double> finalSolutionFlightDistanceChanges = new HashMap<>(); // Additional field to store saved flight distance of each trip for the final best feasible solution
     private static List<UAMTrip> subTrips = null;
     private static final Map<Id<DvrpVehicle>, UAMVehicle> vehicles = new HashMap<>();
     private static final Map<Id<DvrpVehicle>, UAMStation> vehicleOriginStationMap = new HashMap<>();
@@ -186,16 +187,32 @@ public class GeneticAlgorithm {
         List<Double> sortedTravelTimeChanges = new ArrayList<>(travelTimeChanges);
         Collections.sort(sortedTravelTimeChanges);
 
-        double average = sortedTravelTimeChanges.stream()
+        double averageTravelTime = sortedTravelTimeChanges.stream()
                 .mapToDouble(Double::doubleValue)
                 .average()
                 .orElse(Double.NaN);
-        double percentile5th = sortedTravelTimeChanges.get((int) (0.05 * sortedTravelTimeChanges.size()));
-        double percentile95th = sortedTravelTimeChanges.get((int) (0.95 * sortedTravelTimeChanges.size()) - 1);
+        double percentile5thTravelTime = sortedTravelTimeChanges.get((int) (0.05 * sortedTravelTimeChanges.size()));
+        double percentile95thTravelTime = sortedTravelTimeChanges.get((int) (0.95 * sortedTravelTimeChanges.size()) - 1);
 
-        System.out.println("Average travel time change: " + average);
-        System.out.println("5th percentile of travel time change: " + percentile5th);
-        System.out.println("95th percentile of travel time change: " + percentile95th);
+        System.out.println("Average travel time change: " + averageTravelTime);
+        System.out.println("5th percentile of travel time change: " + percentile5thTravelTime);
+        System.out.println("95th percentile of travel time change: " + percentile95thTravelTime);
+
+
+        Collection<Double> flightDistanceChanges = finalSolutionFlightDistanceChanges.values();
+        List<Double> sortedFlightDistanceChanges = new ArrayList<>(flightDistanceChanges);
+        Collections.sort(sortedFlightDistanceChanges);
+
+        double averageFlightDistance = sortedFlightDistanceChanges.stream()
+                .mapToDouble(Double::doubleValue)
+                .average()
+                .orElse(Double.NaN);
+        double percentile5thFlightDistance = sortedFlightDistanceChanges.get((int) (0.05 * sortedFlightDistanceChanges.size()));
+        double percentile95thFlightDistance = sortedFlightDistanceChanges.get((int) (0.95 * sortedFlightDistanceChanges.size()) - 1);
+
+        System.out.println("Average flight distance change: " + averageFlightDistance);
+        System.out.println("5th percentile of flight distance change: " + percentile5thFlightDistance);
+        System.out.println("95th percentile of flight distance change: " + percentile95thFlightDistance);
     }
 
     private static ArrayList<UAMTrip> extractSubTrips(List<UAMTrip> uamTrips) {
@@ -210,9 +227,6 @@ public class GeneticAlgorithm {
         for (UAMTrip trip : subTrips) {
             for (UAMStation station : stations.values()) {
                 if (trip.calculateAccessTeleportationDistance(station) <= SEARCH_RADIUS_ORIGIN) {
-                    if (trip.calculateAccessTeleportationDistance(station)> THRESHOLD_FOR_TRIPS_LONGER_THAN){
-                        NUMBER_OF_TRIPS_LONGER_TAHN++;
-                    }
                     List<UAMVehicle> vehicles = originStationVehicleMap.get(station.getId());
                     if (vehicles == null){
                         continue;
@@ -225,9 +239,13 @@ public class GeneticAlgorithm {
 
                     tripVehicleMap.put(trip.getTripId(), existingVehicles);
                 } else {
+                    if (trip.calculateAccessTeleportationDistance(station)> THRESHOLD_FOR_TRIPS_LONGER_THAN){
+                        NUMBER_OF_TRIPS_LONGER_TAHN++;
+                    }
+
+
                     //throw new IllegalArgumentException("trip.calculateTeleportationDistance(station) <= SEARCH_RADIUS_ORIGIN");
                     Map<UAMVehicle, Integer> vehicleCapacityMap = tripVehicleMap.getOrDefault(trip.getTripId(), new HashMap<>());
-
                     UAMVehicle vehicle = feedDataForVehicleCreation(trip, false);
                     vehicleCapacityMap.put(vehicle, VEHICLE_CAPACITY);
                     tripVehicleMap.put(trip.getTripId(), vehicleCapacityMap);
@@ -283,7 +301,6 @@ public class GeneticAlgorithm {
                 UAMVehicle vehicle = feedDataForVehicleCreation(trip, false);
                 vehicleCapacityMap.put(vehicle, VEHICLE_CAPACITY);
                 tripVehicleMap.put(trip.getTripId(), vehicleCapacityMap);
-
                 vehicleList.add(vehicle);
             }
 
@@ -407,6 +424,17 @@ public class GeneticAlgorithm {
             vehicleAssignments.get(vehicleId).add(subTrips.get(i));
         }
 
+        if (isFinalBestFeasibleSolution){
+            int pooledTrips = 0;
+            for (List<UAMTrip> trips : vehicleAssignments.values()) {
+                if (trips.size() > 1) {
+                    pooledTrips += trips.size(); // Count all pooled trips
+                }
+            }
+            double poolingRate = (double) pooledTrips / subTrips.size();
+            System.out.println("Pooling rate: " + poolingRate);
+        }
+
         // Calculate fitness per vehicle
         for (Map.Entry<Integer, List<UAMTrip>> entry : vehicleAssignments.entrySet()) {
             List<UAMTrip> trips = entry.getValue();
@@ -434,23 +462,29 @@ public class GeneticAlgorithm {
             double boardingTimeForAllTrips = baseTrip.getDepartureTime() + baseTrip.calculateAccessTeleportationTime(originStationOfVehicle);
             // Calculate fitness based on the proposed pooling option
             for (UAMTrip trip : trips) {
-                double timeChange = 0.0;
-
                 if(trip.getTripId().equals(baseTrip.getTripId())){
                     fitness = getFitnessForNonPooledOrBaseTrip(trip, originStationOfVehicle, destinationStationOfVehicle, fitness, isFinalBestFeasibleSolution);
                     continue;
                 }
 
+                double tripTimeChange = 0.0;
+                double tripFlightDistanceChange = 0.0;
+
                 // calculate change in flight distance
                 double flightDistanceChange = getFlightDistanceChange(trip, originStationOfVehicle, destinationStationOfVehicle);
                 fitness += ALPHA * flightDistanceChange;
+                tripFlightDistanceChange += flightDistanceChange;
                 // calculate saved flight distance
                 double savedFlightDistance = trip.calculateFlightDistance(trip.getOriginStation(), trip.getDestinationStation());
                 fitness += ALPHA * (-1) * savedFlightDistance;
+                tripFlightDistanceChange += flightDistanceChange;
+                if(isFinalBestFeasibleSolution){
+                    finalSolutionFlightDistanceChanges.put(trip.getTripId(), tripFlightDistanceChange);
+                }
                 // calculate change in flight time due to the change in flight distance
                 double flightTimeChange = flightDistanceChange / VEHICLE_CRUISE_SPEED;
                 fitness += BETA * flightTimeChange;
-                timeChange += flightTimeChange;
+                tripTimeChange += flightTimeChange;
                 // calculate additional travel time
                 double originalArrivalTimeForThePooledTrip = trip.getDepartureTime() + trip.calculateAccessTeleportationTime(trip.getOriginStation());
                 double additionalTravelTimeDueToAccessMatching = boardingTimeForAllTrips - originalArrivalTimeForThePooledTrip;
@@ -459,12 +493,12 @@ public class GeneticAlgorithm {
                     //TODO: reconsider for "negative additional travel time" cases
                 }
                 fitness += BETA * additionalTravelTimeDueToAccessMatching;
-                timeChange += additionalTravelTimeDueToAccessMatching;
+                tripTimeChange += additionalTravelTimeDueToAccessMatching;
                 double additionalTravelTimeDueToEgressMatching = getTravelTimeChangeDueToEgressMatching(trip, destinationStationOfVehicle);
                 fitness += BETA * additionalTravelTimeDueToEgressMatching;
-                timeChange += additionalTravelTimeDueToEgressMatching;
+                tripTimeChange += additionalTravelTimeDueToEgressMatching;
                 if(isFinalBestFeasibleSolution){
-                    finalSolutionTravelTimeChanges.put(trip.getTripId(), timeChange);
+                    finalSolutionTravelTimeChanges.put(trip.getTripId(), tripTimeChange);
                 }
             }
             //add penalty for the case when vehicle capacity is violated
@@ -476,29 +510,34 @@ public class GeneticAlgorithm {
         return fitness;
     }
     private static double getFitnessForNonPooledOrBaseTrip(UAMTrip trip, UAMStation originStationOfVehicle, UAMStation destinationStationOfVehicle, double fitness, boolean isFinalBestFeasibleSolution) {
-        double timeChange = 0.0;
+        double tripTimeChange = 0.0;
+        double tripFlightDistanceChange = 0.0;
 
         // calculate change in flight distance
         double flightDistanceChange = getFlightDistanceChange(trip, originStationOfVehicle, destinationStationOfVehicle);
         fitness += ALPHA * flightDistanceChange;
+        tripFlightDistanceChange += flightDistanceChange;
+        if(isFinalBestFeasibleSolution){
+            finalSolutionFlightDistanceChanges.put(trip.getTripId(), tripFlightDistanceChange);
+        }
         // calculate change in flight time due to the change in flight distance
         double flightTimeChange = flightDistanceChange / VEHICLE_CRUISE_SPEED;
         fitness += BETA * flightTimeChange;
-        timeChange += flightTimeChange;
+        tripTimeChange += flightTimeChange;
         // calculate change in travel time due to access matching
         double travelTimeChangeDueToAccessMatching = trip.calculateAccessTeleportationTime(originStationOfVehicle) - trip.calculateAccessTeleportationTime(trip.getOriginStation());
         if(travelTimeChangeDueToAccessMatching > 0) {
             fitness += BETA * travelTimeChangeDueToAccessMatching;
-            timeChange += travelTimeChangeDueToAccessMatching;
+            tripTimeChange += travelTimeChangeDueToAccessMatching;
         } else {
             //fitness += BETA_NONE_POOLED_TRIP_EARLIER_DEPARTURE * travelTimeChangeDueToAccessMatching;
         }
         // calculate change in travel time due to egress matching
         double travelTimeChangeDueToEgressMatching = getTravelTimeChangeDueToEgressMatching(trip, destinationStationOfVehicle);
         fitness += BETA * travelTimeChangeDueToEgressMatching;
-        timeChange += travelTimeChangeDueToEgressMatching;
+        tripTimeChange += travelTimeChangeDueToEgressMatching;
         if(isFinalBestFeasibleSolution){
-            finalSolutionTravelTimeChanges.put(trip.getTripId(), timeChange);
+            finalSolutionTravelTimeChanges.put(trip.getTripId(), tripTimeChange);
         }
         return fitness;
     }
@@ -600,5 +639,4 @@ public class GeneticAlgorithm {
     }
 
 }
-//TODO: Need to also print the pooling rate, ideally also print the saved flight distance
 //TODO: Need use the best solution starting from the crossover_disable_after iteration to generate new solutions for remaining iterations
