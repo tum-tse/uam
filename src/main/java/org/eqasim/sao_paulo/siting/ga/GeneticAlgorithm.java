@@ -53,8 +53,8 @@ public class GeneticAlgorithm {
 
     private static List<UAMTrip> subTrips = null;
     private static Map<Id<UAMStation>, UAMStation> stations = null;
-    private static final Map<Id<DvrpVehicle>, UAMVehicle> vehicles = new HashMap<>();
-    private static Map<Id<UAMStation>, List<UAMVehicle>> originStationVehicleMap = new HashMap<>();
+    //private static final Map<Id<DvrpVehicle>, UAMVehicle> vehicles = new HashMap<>();
+    private static final Map<Id<UAMStation>, List<UAMVehicle>> originStationVehicleMap = new HashMap<>();
     private static final Map<Id<DvrpVehicle>, UAMStation> vehicleOriginStationMap = new HashMap<>();
     private static final Map<Id<DvrpVehicle>, UAMStation> vehicleDestinationStationMap = new HashMap<>();
     private static Map<String, Map<UAMVehicle, Integer>> tripVehicleMap = null;
@@ -433,8 +433,8 @@ public class GeneticAlgorithm {
     // SolutionFitnessPair related methods =============================================================================
     // SolutionFitnessPair class to hold individual solutions and their fitness
     private static class SolutionFitnessPair {
-        private int[] solution;
-        private double fitness;
+        private final int[] solution;
+        private final double fitness;
 
         public SolutionFitnessPair(int[] solution, double fitness) {
             this.solution = solution;
@@ -579,7 +579,7 @@ public class GeneticAlgorithm {
         UAMStation nearestDestinationStation = findNearestStation(subTrip, stations, false);
         UAMVehicle vehicle = createVehicle(nearestOriginStation);
 
-        vehicles.put(vehicle.getId(), vehicle);
+        //vehicles.put(vehicle.getId(), vehicle);
         vehicleOriginStationMap.put(vehicle.getId(), nearestOriginStation);
         vehicleDestinationStationMap.put(vehicle.getId(), nearestDestinationStation);
 
