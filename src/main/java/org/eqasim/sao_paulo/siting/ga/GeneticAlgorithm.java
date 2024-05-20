@@ -25,8 +25,8 @@ public class GeneticAlgorithm {
     private static final int BUFFER_START_TIME = 3600*7; // Buffer start time for the first trip
     private static final int BUFFER_END_TIME = 3600*7+240; // Buffer end time for the last trip
 
-    private static final double ALPHA = - 1.0; // Weight for changed flight distances
-    private static final double BETA = - 100; // Weight for change in travel time
+    private static final double ALPHA = - 100.0; // Weight for changed flight distances
+    private static final double BETA = - 1; // Weight for change in travel time
     private static final double BETA_NONE_POOLED_TRIP_EARLIER_DEPARTURE = - 0.1; //TODO: need to reconsider the value
     private static final double PENALTY_FOR_VEHICLE_CAPACITY_VIOLATION = -1000000;
 
@@ -596,4 +596,5 @@ public class GeneticAlgorithm {
     }
 
 }
+//TODO: Need to also print the pooling rate, ideally also print the saved flight distance
 //TODO: Need use the best solution starting from the crossover_disable_after iteration to generate new solutions for remaining iterations
