@@ -463,7 +463,9 @@ public class GeneticAlgorithm {
                 double additionalTravelTimeDueToEgressMatching = getTravelTimeChangeDueToEgressMatching(trip, destinationStationOfVehicle);
                 fitness += BETA * additionalTravelTimeDueToEgressMatching;
                 timeChange += additionalTravelTimeDueToEgressMatching;
-                finalSolutionTravelTimeChanges.put(trip.getTripId(), timeChange);
+                if(isFinalBestFeasibleSolution){
+                    finalSolutionTravelTimeChanges.put(trip.getTripId(), timeChange);
+                }
             }
             //add penalty for the case when vehicle capacity is violated
             if(trips.size()>VEHICLE_CAPACITY){
@@ -495,7 +497,9 @@ public class GeneticAlgorithm {
         double travelTimeChangeDueToEgressMatching = getTravelTimeChangeDueToEgressMatching(trip, destinationStationOfVehicle);
         fitness += BETA * travelTimeChangeDueToEgressMatching;
         timeChange += travelTimeChangeDueToEgressMatching;
-        finalSolutionTravelTimeChanges.put(trip.getTripId(), timeChange);
+        if(isFinalBestFeasibleSolution){
+            finalSolutionTravelTimeChanges.put(trip.getTripId(), timeChange);
+        }
         return fitness;
     }
     private static double getFlightDistanceChange(UAMTrip trip, UAMStation originStationOfVehicle, UAMStation destinationStationOfVehicle) {
