@@ -14,6 +14,7 @@ import org.matsim.contrib.dvrp.fleet.ImmutableDvrpVehicleSpecification;
 import org.matsim.api.core.v01.Id;
 
 public class GeneticAlgorithm {
+    // Genetic Algorithm parameters ====================================================================================
     private static final int MAX_GENERATIONS = 100; // Max number of generations
     private static final int CROSSOVER_DISABLE_AFTER = 100; // New field to control when to stop crossover
     private static final int POP_SIZE = 100; // Population size
@@ -26,19 +27,23 @@ public class GeneticAlgorithm {
     private static final double BETA_NONE_POOLED_TRIP_EARLIER_DEPARTURE = - 0.1; //TODO: need to reconsider the value
     private static final double PENALTY_FOR_VEHICLE_CAPACITY_VIOLATION = -1000000;
 
+    private static final long SEED = 4711; // MATSim default Random Seed
+    private static final Random rand = new Random(SEED);
+
+    // Parameters and constant for the UAM problem =====================================================================
     private static int FIRST_UAM_VEHICLE_ID = 1;
     private static final int VALUE_FOR_NO_VEHICLE_AVAILABLE = -1; // For example, using -1 as an indicator of no vehicle available for a trip
     private static final double END_SERVICE_TIME_OF_THE_DAY = 3600*36; // End service time of the day
     private static final double VEHICLE_CRUISE_SPEED = 180000.0 / 3600.0; // Vehicle cruise speed in m/s
     private static final int VEHICLE_CAPACITY = 4; // Vehicle capacity
 
-    private static final long SEED = 4711; // MATSim default Random Seed
-    private static final Random rand = new Random(SEED);
+    // Variables for the UAM problem ===================================================================================
     private static final int BUFFER_START_TIME = 3600*7; // Buffer start time for the first trip
     private static final int BUFFER_END_TIME = 3600*7+240; // Buffer end time for the last trip
     private static final double SEARCH_RADIUS_ORIGIN = 4000; // search radius for origin station
     private static final double SEARCH_RADIUS_DESTINATION = 4000; // search radius for destination station
 
+    // Helpers for the UAM problem =====================================================================================
     private static final double THRESHOLD_FOR_TRIPS_LONGER_THAN = SEARCH_RADIUS_ORIGIN;
     private static final String THRESHOLD_FOR_TRIPS_LONGER_THAN_STRING = String.valueOf(THRESHOLD_FOR_TRIPS_LONGER_THAN);
     private static int NUMBER_OF_TRIPS_LONGER_TAHN = 0;
@@ -51,6 +56,7 @@ public class GeneticAlgorithm {
     private static double[][] egressTimesUpdated; // Updated egress times for each trip and vehicle
     private static double[][] waitingTimes; // Waiting times at the parking station for each trip and vehicle
 
+    // Data container for the UAM problem ==============================================================================
     private static List<UAMTrip> subTrips = null;
     private static Map<Id<UAMStation>, UAMStation> stations = null;
     //private static final Map<Id<DvrpVehicle>, UAMVehicle> vehicles = new HashMap<>();
@@ -59,11 +65,12 @@ public class GeneticAlgorithm {
     private static final Map<Id<DvrpVehicle>, UAMStation> vehicleDestinationStationMap = new HashMap<>();
     private static Map<String, Map<UAMVehicle, Integer>> tripVehicleMap = null;
 
+    // Data container for outputs
     private static final PriorityQueue<SolutionFitnessPair> solutionsHeap = new PriorityQueue<>(Comparator.comparingDouble(SolutionFitnessPair::getFitness).reversed());
     private static final Map<String, Double> finalSolutionTravelTimeChanges = new HashMap<>(); // Additional field to store travel time change of each trip for the final best feasible solution
     private static final Map<String, Double> finalSolutionFlightDistanceChanges = new HashMap<>(); // Additional field to store saved flight distance of each trip for the final best feasible solution
 
-    // Main method to run the GA
+    // Main method to run the GA =======================================================================================
     public static void main(String[] args) throws IOException {
         // Load data
         DataLoader dataLoader = new DataLoader();
