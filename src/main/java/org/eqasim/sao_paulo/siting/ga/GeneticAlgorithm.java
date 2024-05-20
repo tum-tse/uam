@@ -14,30 +14,30 @@ import org.matsim.contrib.dvrp.fleet.ImmutableDvrpVehicleSpecification;
 import org.matsim.api.core.v01.Id;
 
 public class GeneticAlgorithm {
-    private static final int POP_SIZE = 100; // Population size
     private static final int MAX_GENERATIONS = 100; // Max number of generations
+    private static final int CROSSOVER_DISABLE_AFTER = 100; // New field to control when to stop crossover
+    private static final int POP_SIZE = 100; // Population size
     private static final double MUTATION_RATE = 0.05; // Mutation rate
     private static final double CROSSOVER_RATE = 0.7; // Crossover rate
     private static final int TOURNAMENT_SIZE = 5; // Tournament size for selection
-    private static final int CROSSOVER_DISABLE_AFTER = 100; // New field to control when to stop crossover
-    private static final long SEED = 4711; // MATSim default Random Seed
-    private static final Random rand = new Random(SEED);
-    private static final int BUFFER_START_TIME = 3600*7; // Buffer start time for the first trip
-    private static final int BUFFER_END_TIME = 3600*7+240; // Buffer end time for the last trip
 
     private static final double ALPHA = - 100.0; // Weight for changed flight distances
     private static final double BETA = - 1; // Weight for change in travel time
     private static final double BETA_NONE_POOLED_TRIP_EARLIER_DEPARTURE = - 0.1; //TODO: need to reconsider the value
     private static final double PENALTY_FOR_VEHICLE_CAPACITY_VIOLATION = -1000000;
 
-    private static final int VEHICLE_CAPACITY = 4; // Vehicle capacity
-    private static final double VEHICLE_CRUISE_SPEED = 180000.0 / 3600.0; // Vehicle cruise speed in m/s
-    private static final double SEARCH_RADIUS_ORIGIN = 2000; // search radius for origin station
-    private static final double SEARCH_RADIUS_DESTINATION = 2000; // search radius for destination station
-
-    private static final int VALUE_FOR_NO_VEHICLE_AVAILABLE = -1; // For example, using -1 as an indicator of no vehicle available
-    private static final double END_SERVICE_TIME_OF_THE_DAY = 3600*36; // End service time of the day
     private static int FIRST_UAM_VEHICLE_ID = 1;
+    private static final int VALUE_FOR_NO_VEHICLE_AVAILABLE = -1; // For example, using -1 as an indicator of no vehicle available for a trip
+    private static final double END_SERVICE_TIME_OF_THE_DAY = 3600*36; // End service time of the day
+    private static final double VEHICLE_CRUISE_SPEED = 180000.0 / 3600.0; // Vehicle cruise speed in m/s
+    private static final int VEHICLE_CAPACITY = 4; // Vehicle capacity
+
+    private static final long SEED = 4711; // MATSim default Random Seed
+    private static final Random rand = new Random(SEED);
+    private static final int BUFFER_START_TIME = 3600*7; // Buffer start time for the first trip
+    private static final int BUFFER_END_TIME = 3600*7+240; // Buffer end time for the last trip
+    private static final double SEARCH_RADIUS_ORIGIN = 4000; // search radius for origin station
+    private static final double SEARCH_RADIUS_DESTINATION = 4000; // search radius for destination station
 
     private static final double THRESHOLD_FOR_TRIPS_LONGER_THAN = SEARCH_RADIUS_ORIGIN;
     private static final String THRESHOLD_FOR_TRIPS_LONGER_THAN_STRING = String.valueOf(THRESHOLD_FOR_TRIPS_LONGER_THAN);
@@ -51,16 +51,17 @@ public class GeneticAlgorithm {
     private static double[][] egressTimesUpdated; // Updated egress times for each trip and vehicle
     private static double[][] waitingTimes; // Waiting times at the parking station for each trip and vehicle
 
+    private static List<UAMTrip> subTrips = null;
+    private static Map<Id<UAMStation>, UAMStation> stations = null;
+    private static final Map<Id<DvrpVehicle>, UAMVehicle> vehicles = new HashMap<>();
+    private static Map<Id<UAMStation>, List<UAMVehicle>> originStationVehicleMap = new HashMap<>();
+    private static final Map<Id<DvrpVehicle>, UAMStation> vehicleOriginStationMap = new HashMap<>();
+    private static final Map<Id<DvrpVehicle>, UAMStation> vehicleDestinationStationMap = new HashMap<>();
+    private static Map<String, Map<UAMVehicle, Integer>> tripVehicleMap = null;
+
     private static final PriorityQueue<SolutionFitnessPair> solutionsHeap = new PriorityQueue<>(Comparator.comparingDouble(SolutionFitnessPair::getFitness).reversed());
     private static final Map<String, Double> finalSolutionTravelTimeChanges = new HashMap<>(); // Additional field to store travel time change of each trip for the final best feasible solution
     private static final Map<String, Double> finalSolutionFlightDistanceChanges = new HashMap<>(); // Additional field to store saved flight distance of each trip for the final best feasible solution
-    private static List<UAMTrip> subTrips = null;
-    private static final Map<Id<DvrpVehicle>, UAMVehicle> vehicles = new HashMap<>();
-    private static final Map<Id<DvrpVehicle>, UAMStation> vehicleOriginStationMap = new HashMap<>();
-    private static Map<Id<UAMStation>, UAMStation> stations = null;
-    private static Map<Id<UAMStation>, List<UAMVehicle>> originStationVehicleMap = new HashMap<>();
-    private static final Map<Id<DvrpVehicle>, UAMStation> vehicleDestinationStationMap = new HashMap<>();
-    private static Map<String, Map<UAMVehicle, Integer>> tripVehicleMap = null;
 
     // Main method to run the GA
     public static void main(String[] args) throws IOException {
@@ -103,165 +104,8 @@ public class GeneticAlgorithm {
         // Print the NUMBER_OF_TRIPS_LONGER_THAN
         System.out.println("Threshold for trips longer than " + THRESHOLD_FOR_TRIPS_LONGER_THAN_STRING + ": " + NUMBER_OF_TRIPS_LONGER_TAHN);
     }
-    // Find the best fitness in the current population
-    private static double findBestFitness(int[][] population) {
-        double bestFitness = -Double.MAX_VALUE;
-        for (int[] individual : population) {
-            double fitness = calculateFitness(individual, false);
-            if (fitness > bestFitness) {
-                bestFitness = fitness;
-            }
-        }
-        return bestFitness;
-    }
 
-    // New method to update the solutions heap
-    private static void updateSolutionsHeap(int[][] population) {
-        for (int[] individual : population) {
-            double fitness = calculateFitness(individual, false);
-            // Only consider adding if the new solution is better than the worst in the heap
-            if (fitness > solutionsHeap.peek().getFitness()) {
-                if (solutionsHeap.size() > POP_SIZE) {
-                    solutionsHeap.poll(); // Remove the solution with the lowest fitness
-                    throw new IllegalArgumentException("Need to handle the case when the heap size exceeds the population size.");
-                } else {
-                    solutionsHeap.poll(); // Remove the solution with the lowest fitness
-                    solutionsHeap.add(new SolutionFitnessPair(individual, fitness)); // Add the new better solution
-                }
-            }
-        }
-    }
-    // SolutionFitnessPair class to hold individual solutions and their fitness
-    private static class SolutionFitnessPair {
-        private int[] solution;
-        private double fitness;
-
-        public SolutionFitnessPair(int[] solution, double fitness) {
-            this.solution = solution;
-            this.fitness = fitness;
-        }
-
-        public int[] getSolution() {
-            return solution;
-        }
-
-        public double getFitness() {
-            return fitness;
-        }
-    }
-    // Method to find the first feasible solution from the priority queue without altering the original heap
-    private static SolutionFitnessPair findFeasibleSolution(PriorityQueue<SolutionFitnessPair> originalSolutionsHeap) {
-        // Create a new priority queue that is a copy of the original but sorted in descending order by fitness
-        PriorityQueue<SolutionFitnessPair> solutionsHeapCopy = new PriorityQueue<>(
-                Comparator.comparingDouble(SolutionFitnessPair::getFitness).reversed()
-        );
-        solutionsHeapCopy.addAll(originalSolutionsHeap);
-
-        // Iterate through the copied solutions heap to find a feasible solution
-        while (!solutionsHeapCopy.isEmpty()) {
-            SolutionFitnessPair solutionPair = solutionsHeapCopy.poll(); // Remove and retrieve the solution with the highest fitness
-            int[] candidateSolution = solutionPair.getSolution();
-            if (isFeasible(candidateSolution)) {
-                return solutionPair;
-            }
-        }
-        throw new IllegalStateException("No feasible solution found in the entire population");
-    }
-    // Helper method to check if a solution violates vehicle capacity constraints
-    private static boolean isFeasible(int[] solution) {
-        Map<Integer, Integer> vehicleLoadCount = new HashMap<>();
-        for (int vehicleId : solution) {
-            vehicleLoadCount.put(vehicleId, vehicleLoadCount.getOrDefault(vehicleId, 0) + 1);
-        }
-        for (int load : vehicleLoadCount.values()) {
-            if (load > VEHICLE_CAPACITY) {
-                return false;
-            }
-        }
-        return true;
-    }
-
-    // Method to calculate and print the performance indicators
-    private static void printPerformanceIndicators() {
-        Collection<Double> travelTimeChanges = finalSolutionTravelTimeChanges.values();
-        List<Double> sortedTravelTimeChanges = new ArrayList<>(travelTimeChanges);
-        Collections.sort(sortedTravelTimeChanges);
-
-        double averageTravelTime = sortedTravelTimeChanges.stream()
-                .mapToDouble(Double::doubleValue)
-                .average()
-                .orElse(Double.NaN);
-        double percentile5thTravelTime = sortedTravelTimeChanges.get((int) (0.05 * sortedTravelTimeChanges.size()));
-        double percentile95thTravelTime = sortedTravelTimeChanges.get((int) (0.95 * sortedTravelTimeChanges.size()) - 1);
-
-        System.out.println("Average travel time change: " + averageTravelTime);
-        System.out.println("5th percentile of travel time change: " + percentile5thTravelTime);
-        System.out.println("95th percentile of travel time change: " + percentile95thTravelTime);
-
-
-        Collection<Double> flightDistanceChanges = finalSolutionFlightDistanceChanges.values();
-        List<Double> sortedFlightDistanceChanges = new ArrayList<>(flightDistanceChanges);
-        Collections.sort(sortedFlightDistanceChanges);
-
-        double averageFlightDistance = sortedFlightDistanceChanges.stream()
-                .mapToDouble(Double::doubleValue)
-                .average()
-                .orElse(Double.NaN);
-        double percentile5thFlightDistance = sortedFlightDistanceChanges.get((int) (0.05 * sortedFlightDistanceChanges.size()));
-        double percentile95thFlightDistance = sortedFlightDistanceChanges.get((int) (0.95 * sortedFlightDistanceChanges.size()) - 1);
-
-        System.out.println("Average flight distance change: " + averageFlightDistance);
-        System.out.println("5th percentile of flight distance change: " + percentile5thFlightDistance);
-        System.out.println("95th percentile of flight distance change: " + percentile95thFlightDistance);
-    }
-
-    private static ArrayList<UAMTrip> extractSubTrips(List<UAMTrip> uamTrips) {
-        // extract sub trips from uamTrips based on the departure time of trips falling between buffer start and end time
-        return uamTrips.stream()
-                .filter(trip -> trip.getDepartureTime() >= BUFFER_START_TIME && trip.getDepartureTime() < BUFFER_END_TIME)
-                .collect(Collectors.toCollection(ArrayList::new));
-    }
-
-    private static Map<String, Map<UAMVehicle, Integer>> findNearbyVehiclesToTrips(List<UAMTrip> subTrips) {
-        Map<String, Map<UAMVehicle, Integer>> tripVehicleMap = new HashMap<>();
-        for (UAMTrip trip : subTrips) {
-            for (UAMStation station : stations.values()) {
-                if (trip.calculateAccessTeleportationDistance(station) <= SEARCH_RADIUS_ORIGIN) {
-                    List<UAMVehicle> vehicles = originStationVehicleMap.get(station.getId());
-                    if (vehicles == null){
-                        continue;
-                    }
-                    Map<UAMVehicle, Integer> existingVehicles = tripVehicleMap.getOrDefault(trip.getTripId(), new HashMap<>());
-
-                    for (UAMVehicle vehicle : vehicles) {
-                        existingVehicles.put(vehicle, VEHICLE_CAPACITY);
-                    }
-
-                    tripVehicleMap.put(trip.getTripId(), existingVehicles);
-                } else {
-                    if (trip.calculateAccessTeleportationDistance(station)> THRESHOLD_FOR_TRIPS_LONGER_THAN){
-                        NUMBER_OF_TRIPS_LONGER_TAHN++;
-                    }
-
-
-                    //throw new IllegalArgumentException("trip.calculateTeleportationDistance(station) <= SEARCH_RADIUS_ORIGIN");
-                    Map<UAMVehicle, Integer> vehicleCapacityMap = tripVehicleMap.getOrDefault(trip.getTripId(), new HashMap<>());
-                    UAMVehicle vehicle = feedDataForVehicleCreation(trip, false);
-                    vehicleCapacityMap.put(vehicle, VEHICLE_CAPACITY);
-                    tripVehicleMap.put(trip.getTripId(), vehicleCapacityMap);
-                }
-            }
-        }
-        return tripVehicleMap;
-    }
-    private static void resetVehicleCapacities(Map<String, Map<UAMVehicle, Integer>> tripVehicleMap) {
-        for (Map<UAMVehicle, Integer> vehicleMap : tripVehicleMap.values()) {
-            vehicleMap.forEach((vehicle, capacity) -> {
-                vehicleMap.put(vehicle, VEHICLE_CAPACITY); // Reset capacity to 4
-            });
-        }
-    }
-
+    // GA ==============================================================================================================
     // Initialize population with random assignments
     private static int[][] initializePopulation() {
         int[][] population = new int[GeneticAlgorithm.POP_SIZE][];
@@ -269,6 +113,86 @@ public class GeneticAlgorithm {
             population[i] = generateIndividual();
         }
         return population;
+    }
+    // Generate a random individual
+    private static int[] generateIndividual() {
+        int[] individual = new int[subTrips.size()];
+        for (int i = 0; i < individual.length; i++) {
+            assignAvailableVehicle(i, individual);
+        }
+        return individual;
+    }
+
+    // Modified evolvePopulation method
+    private static int[][] evolvePopulation(int[][] population, int currentGeneration) {
+        int[][] newPop = new int[POP_SIZE][];
+        boolean useCrossover = currentGeneration < CROSSOVER_DISABLE_AFTER;
+
+        for (int i = 0; i < POP_SIZE; i++) {
+            int[] parent1 = select(population);
+            int[] parent2 = select(population);
+            int[] child;
+
+            if (useCrossover && rand.nextDouble() < CROSSOVER_RATE) {
+                child = crossover(parent1, parent2);
+            } else {
+                child = rand.nextBoolean() ? parent1 : parent2; // Skip crossover, use parent directly
+            }
+
+            newPop[i] = mutate(child); // Mutation is always applied
+        }
+        return newPop;
+    }
+    // Selection - Tournament selection with null check
+    private static int[] select(int[][] pop) {
+        int[] best = null;
+        double bestFitness = -Double.MAX_VALUE;
+
+        for (int i = 0; i < TOURNAMENT_SIZE; i++) {
+            int[] individual = pop[rand.nextInt(POP_SIZE)];
+            double fitness = calculateFitness(individual, false);
+            if (fitness > bestFitness) {
+                best = individual;
+                bestFitness = fitness;
+            }
+        }
+
+        //TODO: Reconsider this part
+        // Check if 'best' is null which can be due to empty population array
+        if (best == null) {
+            // Handle the scenario when no best individual was found
+            // For example: return a new random individual or handle the error
+            // Returning new random individual as a fallback:
+            best = generateIndividual();  // Assuming generateIndividual() creates a valid random individual
+
+            //throw new IllegalArgumentException("No best individual found");
+            throw new IllegalArgumentException("No best individual found");
+        }
+
+        return Arrays.copyOf(best, best.length); // Return a copy of the best individual
+    }
+    //TODO: consider to repair the solution if it is not feasible due to the violation of vehicle capacity constraint
+    // Crossover - Single point crossover //TODO: Implement other types of crossover instead of single point
+    private static int[] crossover(int[] parent1, int[] parent2) {
+        int[] child = new int[parent1.length];
+
+        int crossoverPoint = rand.nextInt(parent1.length);
+        for (int i = 0; i < crossoverPoint; i++) {
+            child[i] = parent1[i];
+        }
+        for (int i = crossoverPoint; i < parent2.length; i++) {
+            child[i] = parent2[i];
+        }
+        return child;
+    }
+    // Mutation - Randomly change vehicle assignment
+    private static int[] mutate(int[] individual) {
+        for (int i = 0; i < individual.length; i++) {
+            if (rand.nextDouble() < MUTATION_RATE) {
+                assignAvailableVehicle(i, individual);
+            }
+        }
+        return individual;
     }
 
     private static void assignAvailableVehicle(int i, int[] individual) {
@@ -326,90 +250,7 @@ public class GeneticAlgorithm {
         }
     }
 
-    // Generate a random individual
-    private static int[] generateIndividual() {
-        int[] individual = new int[subTrips.size()];
-        for (int i = 0; i < individual.length; i++) {
-            assignAvailableVehicle(i, individual);
-        }
-        return individual;
-    }
-
-    // Modified evolvePopulation method
-    private static int[][] evolvePopulation(int[][] population, int currentGeneration) {
-        int[][] newPop = new int[POP_SIZE][];
-        boolean useCrossover = currentGeneration < CROSSOVER_DISABLE_AFTER;
-
-        for (int i = 0; i < POP_SIZE; i++) {
-            int[] parent1 = select(population);
-            int[] parent2 = select(population);
-            int[] child;
-
-            if (useCrossover && rand.nextDouble() < CROSSOVER_RATE) {
-                child = crossover(parent1, parent2);
-            } else {
-                child = rand.nextBoolean() ? parent1 : parent2; // Skip crossover, use parent directly
-            }
-
-            newPop[i] = mutate(child); // Mutation is always applied
-        }
-        return newPop;
-    }
-
-    // Selection - Tournament selection with null check
-    private static int[] select(int[][] pop) {
-        int[] best = null;
-        double bestFitness = -Double.MAX_VALUE;
-
-        for (int i = 0; i < TOURNAMENT_SIZE; i++) {
-            int[] individual = pop[rand.nextInt(POP_SIZE)];
-            double fitness = calculateFitness(individual, false);
-            if (fitness > bestFitness) {
-                best = individual;
-                bestFitness = fitness;
-            }
-        }
-
-        //TODO: Reconsider this part
-        // Check if 'best' is null which can be due to empty population array
-        if (best == null) {
-            // Handle the scenario when no best individual was found
-            // For example: return a new random individual or handle the error
-            // Returning new random individual as a fallback:
-            best = generateIndividual();  // Assuming generateIndividual() creates a valid random individual
-
-            //throw new IllegalArgumentException("No best individual found");
-            throw new IllegalArgumentException("No best individual found");
-        }
-
-        return Arrays.copyOf(best, best.length); // Return a copy of the best individual
-    }
-
-    //TODO: consider to repair the solution if it is not feasible due to the violation of vehicle capacity constraint
-    // Crossover - Single point crossover //TODO: Implement other types of crossover instead of single point
-    private static int[] crossover(int[] parent1, int[] parent2) {
-        int[] child = new int[parent1.length];
-
-        int crossoverPoint = rand.nextInt(parent1.length);
-        for (int i = 0; i < crossoverPoint; i++) {
-            child[i] = parent1[i];
-        }
-        for (int i = crossoverPoint; i < parent2.length; i++) {
-            child[i] = parent2[i];
-        }
-        return child;
-    }
-
-    // Mutation - Randomly change vehicle assignment
-    private static int[] mutate(int[] individual) {
-        for (int i = 0; i < individual.length; i++) {
-            if (rand.nextDouble() < MUTATION_RATE) {
-                assignAvailableVehicle(i, individual);
-            }
-        }
-        return individual;
-    }
-
+    // Objective function ==============================================================================================
     // Calculate fitness for an individual
     private static double calculateFitness(int[] individual, boolean isFinalBestFeasibleSolution) {
         double fitness = 0.0;
@@ -548,6 +389,167 @@ public class GeneticAlgorithm {
         return trip.calculateEgressTeleportationTime(destinationStationOfVehicle) - trip.calculateEgressTeleportationTime(trip.getDestinationStation());
     }
 
+    // Helper methods for GA ===========================================================================================
+    private static void resetVehicleCapacities(Map<String, Map<UAMVehicle, Integer>> tripVehicleMap) {
+        for (Map<UAMVehicle, Integer> vehicleMap : tripVehicleMap.values()) {
+            vehicleMap.forEach((vehicle, capacity) -> {
+                vehicleMap.put(vehicle, VEHICLE_CAPACITY); // Reset capacity to 4
+            });
+        }
+    }
+    private static Map<String, Map<UAMVehicle, Integer>> findNearbyVehiclesToTrips(List<UAMTrip> subTrips) {
+        Map<String, Map<UAMVehicle, Integer>> tripVehicleMap = new HashMap<>();
+        for (UAMTrip trip : subTrips) {
+            for (UAMStation station : stations.values()) {
+                if (trip.calculateAccessTeleportationDistance(station) <= SEARCH_RADIUS_ORIGIN) {
+                    List<UAMVehicle> vehicles = originStationVehicleMap.get(station.getId());
+                    if (vehicles == null){
+                        continue;
+                    }
+                    Map<UAMVehicle, Integer> existingVehicles = tripVehicleMap.getOrDefault(trip.getTripId(), new HashMap<>());
+
+                    for (UAMVehicle vehicle : vehicles) {
+                        existingVehicles.put(vehicle, VEHICLE_CAPACITY);
+                    }
+
+                    tripVehicleMap.put(trip.getTripId(), existingVehicles);
+                } else {
+                    if (trip.calculateAccessTeleportationDistance(station)> THRESHOLD_FOR_TRIPS_LONGER_THAN){
+                        NUMBER_OF_TRIPS_LONGER_TAHN++;
+                    }
+
+
+                    //throw new IllegalArgumentException("trip.calculateTeleportationDistance(station) <= SEARCH_RADIUS_ORIGIN");
+                    Map<UAMVehicle, Integer> vehicleCapacityMap = tripVehicleMap.getOrDefault(trip.getTripId(), new HashMap<>());
+                    UAMVehicle vehicle = feedDataForVehicleCreation(trip, false);
+                    vehicleCapacityMap.put(vehicle, VEHICLE_CAPACITY);
+                    tripVehicleMap.put(trip.getTripId(), vehicleCapacityMap);
+                }
+            }
+        }
+        return tripVehicleMap;
+    }
+
+    // SolutionFitnessPair related methods =============================================================================
+    // SolutionFitnessPair class to hold individual solutions and their fitness
+    private static class SolutionFitnessPair {
+        private int[] solution;
+        private double fitness;
+
+        public SolutionFitnessPair(int[] solution, double fitness) {
+            this.solution = solution;
+            this.fitness = fitness;
+        }
+
+        public int[] getSolution() {
+            return solution;
+        }
+
+        public double getFitness() {
+            return fitness;
+        }
+    }
+    // New method to update the solutions heap
+    private static void updateSolutionsHeap(int[][] population) {
+        for (int[] individual : population) {
+            double fitness = calculateFitness(individual, false);
+            // Only consider adding if the new solution is better than the worst in the heap
+            if (fitness > solutionsHeap.peek().getFitness()) {
+                if (solutionsHeap.size() > POP_SIZE) {
+                    solutionsHeap.poll(); // Remove the solution with the lowest fitness
+                    throw new IllegalArgumentException("Need to handle the case when the heap size exceeds the population size.");
+                } else {
+                    solutionsHeap.poll(); // Remove the solution with the lowest fitness
+                    solutionsHeap.add(new SolutionFitnessPair(individual, fitness)); // Add the new better solution
+                }
+            }
+        }
+    }
+    // Method to find the first feasible solution from the priority queue without altering the original heap
+    private static SolutionFitnessPair findFeasibleSolution(PriorityQueue<SolutionFitnessPair> originalSolutionsHeap) {
+        // Create a new priority queue that is a copy of the original but sorted in descending order by fitness
+        PriorityQueue<SolutionFitnessPair> solutionsHeapCopy = new PriorityQueue<>(
+                Comparator.comparingDouble(SolutionFitnessPair::getFitness).reversed()
+        );
+        solutionsHeapCopy.addAll(originalSolutionsHeap);
+
+        // Iterate through the copied solutions heap to find a feasible solution
+        while (!solutionsHeapCopy.isEmpty()) {
+            SolutionFitnessPair solutionPair = solutionsHeapCopy.poll(); // Remove and retrieve the solution with the highest fitness
+            int[] candidateSolution = solutionPair.getSolution();
+            if (isFeasible(candidateSolution)) {
+                return solutionPair;
+            }
+        }
+        throw new IllegalStateException("No feasible solution found in the entire population");
+    }
+    // Helper method to check if a solution violates vehicle capacity constraints
+    private static boolean isFeasible(int[] solution) {
+        Map<Integer, Integer> vehicleLoadCount = new HashMap<>();
+        for (int vehicleId : solution) {
+            vehicleLoadCount.put(vehicleId, vehicleLoadCount.getOrDefault(vehicleId, 0) + 1);
+        }
+        for (int load : vehicleLoadCount.values()) {
+            if (load > VEHICLE_CAPACITY) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    // Performance indicators ==========================================================================================
+    // Find the best fitness in the current population
+    private static double findBestFitness(int[][] population) {
+        double bestFitness = -Double.MAX_VALUE;
+        for (int[] individual : population) {
+            double fitness = calculateFitness(individual, false);
+            if (fitness > bestFitness) {
+                bestFitness = fitness;
+            }
+        }
+        return bestFitness;
+    }
+    // Method to calculate and print the performance indicators
+    private static void printPerformanceIndicators() {
+        Collection<Double> travelTimeChanges = finalSolutionTravelTimeChanges.values();
+        List<Double> sortedTravelTimeChanges = new ArrayList<>(travelTimeChanges);
+        Collections.sort(sortedTravelTimeChanges);
+
+        double averageTravelTime = sortedTravelTimeChanges.stream()
+                .mapToDouble(Double::doubleValue)
+                .average()
+                .orElse(Double.NaN);
+        double percentile5thTravelTime = sortedTravelTimeChanges.get((int) (0.05 * sortedTravelTimeChanges.size()));
+        double percentile95thTravelTime = sortedTravelTimeChanges.get((int) (0.95 * sortedTravelTimeChanges.size()) - 1);
+
+        System.out.println("Average travel time change: " + averageTravelTime);
+        System.out.println("5th percentile of travel time change: " + percentile5thTravelTime);
+        System.out.println("95th percentile of travel time change: " + percentile95thTravelTime);
+
+
+        Collection<Double> flightDistanceChanges = finalSolutionFlightDistanceChanges.values();
+        List<Double> sortedFlightDistanceChanges = new ArrayList<>(flightDistanceChanges);
+        Collections.sort(sortedFlightDistanceChanges);
+
+        double averageFlightDistance = sortedFlightDistanceChanges.stream()
+                .mapToDouble(Double::doubleValue)
+                .average()
+                .orElse(Double.NaN);
+        double percentile5thFlightDistance = sortedFlightDistanceChanges.get((int) (0.05 * sortedFlightDistanceChanges.size()));
+        double percentile95thFlightDistance = sortedFlightDistanceChanges.get((int) (0.95 * sortedFlightDistanceChanges.size()) - 1);
+
+        System.out.println("Average flight distance change: " + averageFlightDistance);
+        System.out.println("5th percentile of flight distance change: " + percentile5thFlightDistance);
+        System.out.println("95th percentile of flight distance change: " + percentile95thFlightDistance);
+    }
+
+    // Initial data extraction methods =================================================================================
+    private static ArrayList<UAMTrip> extractSubTrips(List<UAMTrip> uamTrips) {
+        // extract sub trips from uamTrips based on the departure time of trips falling between buffer start and end time
+        return uamTrips.stream()
+                .filter(trip -> trip.getDepartureTime() >= BUFFER_START_TIME && trip.getDepartureTime() < BUFFER_END_TIME)
+                .collect(Collectors.toCollection(ArrayList::new));
+    }
 
     private static void saveStationVehicleNumber(List<UAMTrip> subTrips) {
 
@@ -572,7 +574,6 @@ public class GeneticAlgorithm {
             feedDataForVehicleCreation(subTrip, true);
         }
     }
-
     private static UAMVehicle feedDataForVehicleCreation(UAMTrip subTrip, boolean isAddingVehicleBeforeInitialization) {
         UAMStation nearestOriginStation = findNearestStation(subTrip, stations, true);
         UAMStation nearestDestinationStation = findNearestStation(subTrip, stations, false);
@@ -593,7 +594,6 @@ public class GeneticAlgorithm {
         }
         return vehicle;
     }
-
     // vehicle creator function
     private static UAMVehicle createVehicle(UAMStation uamStation) {
         /*        UAMVehicleType vehicleType = new UAMVehicleType(id, capacity, range, horizontalSpeed, verticalSpeed,
@@ -619,7 +619,6 @@ public class GeneticAlgorithm {
         return new UAMVehicle(vehicleSpecification,
                 uamStation.getLocationLink(), uamStation.getId(), vehicleType);
     }
-
     private static UAMStation findNearestStation(UAMTrip trip, Map<Id<UAMStation>, UAMStation> stations, boolean accessLeg) {
         UAMStation nearestStation = null;
         double shortestDistance = Double.MAX_VALUE;
