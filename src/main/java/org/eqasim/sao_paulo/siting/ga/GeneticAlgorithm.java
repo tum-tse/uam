@@ -26,14 +26,14 @@ public class GeneticAlgorithm {
     private static final int BUFFER_END_TIME = 3600*7+240; // Buffer end time for the last trip
 
     private static final double ALPHA = - 1.0; // Weight for changed flight distances
-    private static final double BETA = - 0.5; // Weight for change in travel time
+    private static final double BETA = - 100; // Weight for change in travel time
     private static final double BETA_NONE_POOLED_TRIP_EARLIER_DEPARTURE = - 0.1; //TODO: need to reconsider the value
-    private static final double PENALTY_FOR_VEHICLE_CAPACITY_VIOLATION = -10000;
+    private static final double PENALTY_FOR_VEHICLE_CAPACITY_VIOLATION = -1000000;
 
     private static final int VEHICLE_CAPACITY = 4; // Vehicle capacity
     private static final double VEHICLE_CRUISE_SPEED = 180000.0 / 3600.0; // Vehicle cruise speed in m/s
-    private static final double SEARCH_RADIUS_ORIGIN = 200000; // search radius for origin station
-    private static final double SEARCH_RADIUS_DESTINATION = 200000; // search radius for destination station
+    private static final double SEARCH_RADIUS_ORIGIN = 2000; // search radius for origin station
+    private static final double SEARCH_RADIUS_DESTINATION = 2000; // search radius for destination station
 
     private static final int VALUE_FOR_NO_VEHICLE_AVAILABLE = -1; // For example, using -1 as an indicator of no vehicle available
     private static final double END_SERVICE_TIME_OF_THE_DAY = 3600*36; // End service time of the day
@@ -57,7 +57,7 @@ public class GeneticAlgorithm {
     private static final Map<Id<DvrpVehicle>, UAMVehicle> vehicles = new HashMap<>();
     private static final Map<Id<DvrpVehicle>, UAMStation> vehicleOriginStationMap = new HashMap<>();
     private static Map<Id<UAMStation>, UAMStation> stations = null;
-    private static Map<Id<UAMStation>, List<UAMVehicle>> originStationVehicleMap = null;
+    private static Map<Id<UAMStation>, List<UAMVehicle>> originStationVehicleMap = new HashMap<>();
     private static final Map<Id<DvrpVehicle>, UAMStation> vehicleDestinationStationMap = new HashMap<>();
     private static Map<String, Map<UAMVehicle, Integer>> tripVehicleMap = null;
 
@@ -69,8 +69,8 @@ public class GeneticAlgorithm {
         subTrips = extractSubTrips(dataLoader.getUamTrips());
         //vehicles = dataLoader.getVehicles();
         stations = dataLoader.getStations();
-        originStationVehicleMap = saveStationVehicleNumber(subTrips);
-        tripVehicleMap = findNearbyVehiclesToTrips(subTrips, originStationVehicleMap);
+        saveStationVehicleNumber(subTrips);
+        tripVehicleMap = findNearbyVehiclesToTrips(subTrips);
 
         // Initialize population and solutions heap in the first generation
         int[][] population = initializePopulation();
@@ -205,7 +205,7 @@ public class GeneticAlgorithm {
                 .collect(Collectors.toCollection(ArrayList::new));
     }
 
-    private static Map<String, Map<UAMVehicle, Integer>> findNearbyVehiclesToTrips(List<UAMTrip> subTrips, Map<Id<UAMStation>, List<UAMVehicle>> originStationVehicleMap) {
+    private static Map<String, Map<UAMVehicle, Integer>> findNearbyVehiclesToTrips(List<UAMTrip> subTrips) {
         Map<String, Map<UAMVehicle, Integer>> tripVehicleMap = new HashMap<>();
         for (UAMTrip trip : subTrips) {
             for (UAMStation station : stations.values()) {
@@ -225,7 +225,12 @@ public class GeneticAlgorithm {
 
                     tripVehicleMap.put(trip.getTripId(), existingVehicles);
                 } else {
-                    throw new IllegalArgumentException("trip.calculateTeleportationDistance(station) <= SEARCH_RADIUS_ORIGIN");
+                    //throw new IllegalArgumentException("trip.calculateTeleportationDistance(station) <= SEARCH_RADIUS_ORIGIN");
+                    Map<UAMVehicle, Integer> vehicleCapacityMap = tripVehicleMap.getOrDefault(trip.getTripId(), new HashMap<>());
+
+                    UAMVehicle vehicle = feedDataForVehicleCreation(trip, false);
+                    vehicleCapacityMap.put(vehicle, VEHICLE_CAPACITY);
+                    tripVehicleMap.put(trip.getTripId(), vehicleCapacityMap);
                 }
             }
         }
@@ -249,7 +254,8 @@ public class GeneticAlgorithm {
     }
 
     private static void assignAvailableVehicle(int i, int[] individual) {
-        Map<UAMVehicle, Integer> vehicleCapacityMap = tripVehicleMap.get(subTrips.get(i).getTripId());
+        UAMTrip trip = subTrips.get(i);
+        Map<UAMVehicle, Integer> vehicleCapacityMap = tripVehicleMap.get(trip.getTripId());
         //handle the case when there is no available vehicle
         if (vehicleCapacityMap == null) {
             throw new IllegalArgumentException("No available vehicle for the trip, Please increase the search radius.");
@@ -261,14 +267,24 @@ public class GeneticAlgorithm {
 
         if (!vehicleList.isEmpty()) {
             //add egress constraint
-            for (UAMVehicle vehicle: vehicleList){
+            Iterator<UAMVehicle> iterator = vehicleList.iterator();
+            while (iterator.hasNext()) {
+                UAMVehicle vehicle = iterator.next();
                 UAMStation destinationStation = vehicleDestinationStationMap.get(vehicle.getId());
-                if (subTrips.get(i).calculateEgressTeleportationDistance(destinationStation) > SEARCH_RADIUS_DESTINATION){
-                    vehicleList.remove(vehicle);
+                if (trip.calculateEgressTeleportationDistance(destinationStation) > SEARCH_RADIUS_DESTINATION) {
+                    iterator.remove();
                 }
             }
-            if (vehicleList.isEmpty()){
-                throw new IllegalArgumentException("No available vehicle for the trip, Please check the reason.");
+
+            //TODO: should move this to somewhere else?
+            //handle the case when there is no available vehicle
+            if (vehicleList.isEmpty()) {
+                //throw new IllegalArgumentException("No available vehicle for the trip, Please increase the search radius.");
+                UAMVehicle vehicle = feedDataForVehicleCreation(trip, false);
+                vehicleCapacityMap.put(vehicle, VEHICLE_CAPACITY);
+                tripVehicleMap.put(trip.getTripId(), vehicleCapacityMap);
+
+                vehicleList.add(vehicle);
             }
 
             //add access constraint
@@ -280,7 +296,7 @@ public class GeneticAlgorithm {
 
                 // Decrement capacity and explicitly update tripVehicleMap
                 vehicleCapacityMap.put(selectedVehicle, currentCapacity - 1);
-                tripVehicleMap.put(subTrips.get(i).getTripId(), vehicleCapacityMap);
+                tripVehicleMap.put(trip.getTripId(), vehicleCapacityMap);
             } else {
                 if (currentCapacity < 0){
                     throw new IllegalArgumentException("Capacity of the selected vehicle is smaller than 1.");
@@ -490,17 +506,7 @@ public class GeneticAlgorithm {
     }
 
 
-    private static Map<Id<UAMStation>, List<UAMVehicle>> saveStationVehicleNumber(List<UAMTrip> subTrips) {
-        Map<Id<UAMStation>, List<UAMVehicle>> oringinStationVehicleMap = new HashMap<>();
-
-/*        UAMVehicleType vehicleType = new UAMVehicleType(id, capacity, range, horizontalSpeed, verticalSpeed,
-                boardingTime, deboardingTime, turnAroundTime, energyConsumptionVertical, energyConsumptionHorizontal,
-                maximumCharge);*/
-        final Map<Id<UAMVehicleType>, UAMVehicleType> vehicleTypes = new HashMap<>();
-        Id<UAMVehicleType> vehicleTypeId = Id.create("poolingVehicle", UAMVehicleType.class);
-        UAMVehicleType vehicleType = new UAMVehicleType(vehicleTypeId, 0, 0, 0, 0,
-                0, 0, 0);
-        vehicleTypes.put(vehicleTypeId, vehicleType);
+    private static void saveStationVehicleNumber(List<UAMTrip> subTrips) {
 
 /*        // Loop through the stations so that we can assign at least 1 to each station before we assign more vehicles based on the demand
         for (UAMStation station : stations.values()) {
@@ -520,23 +526,42 @@ public class GeneticAlgorithm {
 
         // save the station's vehicle number for the current time based on the UAMTrips' origin station
         for (UAMTrip subTrip : subTrips) {
-            UAMVehicle vehicle = createVehicle(subTrip.getOriginStation(), vehicleTypes.get(vehicleTypeId));
+            feedDataForVehicleCreation(subTrip, true);
+        }
+    }
 
+    private static UAMVehicle feedDataForVehicleCreation(UAMTrip subTrip, boolean isAddingVehicleBeforeInitialization) {
+        UAMStation nearestOriginStation = findNearestStation(subTrip, stations, true);
+        UAMStation nearestDestinationStation = findNearestStation(subTrip, stations, false);
+        UAMVehicle vehicle = createVehicle(nearestOriginStation);
+
+        vehicles.put(vehicle.getId(), vehicle);
+        vehicleOriginStationMap.put(vehicle.getId(), nearestOriginStation);
+        vehicleDestinationStationMap.put(vehicle.getId(), nearestDestinationStation);
+
+        if (isAddingVehicleBeforeInitialization){
             // Get the station ID
-            Id<UAMStation> stationId = subTrip.getOriginStation().getId();
+            Id<UAMStation> nearestOriginStationId = nearestOriginStation.getId();
             // Check if there is already a list for this station ID, if not, create one
-            List<UAMVehicle> vehiclesAtStation = oringinStationVehicleMap.computeIfAbsent(stationId, k -> new ArrayList<>());
+            List<UAMVehicle> vehiclesAtStation = originStationVehicleMap.computeIfAbsent(nearestOriginStationId, k -> new ArrayList<>());
             // Add the new vehicle to the list
             vehiclesAtStation.add(vehicle);
-            vehicles.put(vehicle.getId(), vehicle);
-            vehicleOriginStationMap.put(vehicle.getId(), subTrip.getOriginStation());
-            vehicleDestinationStationMap.put(vehicle.getId(), subTrip.getDestinationStation());
-            oringinStationVehicleMap.put(stationId, vehiclesAtStation);
+            originStationVehicleMap.put(nearestOriginStationId, vehiclesAtStation);
         }
-        return oringinStationVehicleMap;
+        return vehicle;
     }
+
     // vehicle creator function
-    private static UAMVehicle createVehicle(UAMStation uamStation, UAMVehicleType vehicleType) {
+    private static UAMVehicle createVehicle(UAMStation uamStation) {
+        /*        UAMVehicleType vehicleType = new UAMVehicleType(id, capacity, range, horizontalSpeed, verticalSpeed,
+                boardingTime, deboardingTime, turnAroundTime, energyConsumptionVertical, energyConsumptionHorizontal,
+                maximumCharge);*/
+        //final Map<Id<UAMVehicleType>, UAMVehicleType> vehicleTypes = new HashMap<>();
+        Id<UAMVehicleType> vehicleTypeId = Id.create("poolingVehicle", UAMVehicleType.class);
+        UAMVehicleType vehicleType = new UAMVehicleType(vehicleTypeId, 0, 0, 0, 0,
+                0, 0, 0);
+        //vehicleTypes.put(vehicleTypeId, vehicleType);
+        
         // Create a builder instance
         ImmutableDvrpVehicleSpecification.Builder builder = ImmutableDvrpVehicleSpecification.newBuilder();
         // Set the properties of the vehicle
@@ -550,6 +575,24 @@ public class GeneticAlgorithm {
 
         return new UAMVehicle(vehicleSpecification,
                 uamStation.getLocationLink(), uamStation.getId(), vehicleType);
+    }
+
+    private static UAMStation findNearestStation(UAMTrip trip, Map<Id<UAMStation>, UAMStation> stations, boolean accessLeg) {
+        UAMStation nearestStation = null;
+        double shortestDistance = Double.MAX_VALUE;
+        for (UAMStation station: stations.values()){
+            double distance;
+            if (accessLeg){
+                distance = trip.calculateAccessTeleportationDistance(station);
+            } else {
+                distance = trip.calculateEgressTeleportationDistance(station);
+            }
+            if (distance < shortestDistance){
+                nearestStation = station;
+                shortestDistance = distance;
+            }
+        }
+        return nearestStation;
     }
 
 }
