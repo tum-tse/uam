@@ -225,10 +225,8 @@ public class GeneticAlgorithm {
                 }
             }
 
-            //TODO: should move this to somewhere else?
-            //handle the case when there is no available vehicle
+            // ----- add a new vehicle for the trip when there is no available vehicle (i.e., vehicle still has capacity) after checking the egress constraint
             if (vehicleList.isEmpty()) {
-                //throw new IllegalArgumentException("No available vehicle for the trip, Please increase the search radius.");
                 UAMVehicle vehicle = feedDataForVehicleCreation(trip, false);
                 vehicleCapacityMap.put(vehicle, VEHICLE_CAPACITY);
                 tripVehicleMap.put(trip.getTripId(), vehicleCapacityMap);
@@ -425,8 +423,7 @@ public class GeneticAlgorithm {
                         NUMBER_OF_TRIPS_LONGER_TAHN++;
                     }
 
-
-                    //throw new IllegalArgumentException("trip.calculateTeleportationDistance(station) <= SEARCH_RADIUS_ORIGIN");
+                    // ----- Add a new vehicle for the trip when the access teleportation distance is longer than the search radius
                     Map<UAMVehicle, Integer> vehicleCapacityMap = tripVehicleMap.getOrDefault(trip.getTripId(), new HashMap<>());
                     UAMVehicle vehicle = feedDataForVehicleCreation(trip, false);
                     vehicleCapacityMap.put(vehicle, VEHICLE_CAPACITY);
