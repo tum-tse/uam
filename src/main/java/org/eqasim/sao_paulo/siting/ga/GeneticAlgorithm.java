@@ -39,7 +39,7 @@ public class GeneticAlgorithm {
     private static final double END_SERVICE_TIME_OF_THE_DAY = 3600*36; // End service time of the day
     private static int FIRST_UAM_VEHICLE_ID = 1;
 
-    private static final int THRESHOLD_FOR_TRIPS_LONGER_THAN = 2000;
+    private static final double THRESHOLD_FOR_TRIPS_LONGER_THAN = SEARCH_RADIUS_ORIGIN;
     private static final String THRESHOLD_FOR_TRIPS_LONGER_THAN_STRING = String.valueOf(THRESHOLD_FOR_TRIPS_LONGER_THAN);
     private static int NUMBER_OF_TRIPS_LONGER_TAHN = 0;
 
