@@ -95,7 +95,6 @@ public class GeneticAlgorithm {
 
         // GA iterations
         for (int gen = 1; gen < MAX_GENERATIONS; gen++) {
-            resetVehicleCapacities(tripVehicleMap); // Reset the vehicle capacity at the beginning of each GA iteration since capacity of vehicles will be updated during each iteration
             population = evolvePopulation(population, gen);
             updateSolutionsHeap(population);
             System.out.println("Generation " + gen + ": Best fitness = " + findBestFitness(population));
@@ -127,6 +126,7 @@ public class GeneticAlgorithm {
     private static int[] generateIndividual() {
         int[] individual = new int[subTrips.size()];
         for (int i = 0; i < individual.length; i++) {
+            resetVehicleCapacities(tripVehicleMap); // Reset the vehicle capacity since capacity of vehicles will be updated during each individual generation
             assignAvailableVehicle(i, individual);
         }
         return individual;
@@ -198,6 +198,7 @@ public class GeneticAlgorithm {
     private static int[] mutate(int[] individual) {
         for (int i = 0; i < individual.length; i++) {
             if (rand.nextDouble() < MUTATION_RATE) {
+                resetVehicleCapacities(tripVehicleMap); // Reset the vehicle capacity since capacity of vehicles will be updated during each individual generation
                 assignAvailableVehicle(i, individual);
             }
         }
