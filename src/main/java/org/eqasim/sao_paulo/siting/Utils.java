@@ -218,7 +218,7 @@ public class Utils {
     public static class UAMTrip {
         private final String tripId;
         private final double originX, originY, destX, destY, departureTime, flightDistance;
-        private final UAMStation origStation, destStation; // Changed to Integer to handle null values
+        private UAMStation origStation, destStation; // Changed to Integer to handle null values
         private final String purpose, income;
         private double accessTimeToPooledStation; // Time for access to the station
 
@@ -258,6 +258,15 @@ public class Utils {
         // TODO: Use MATSim to calculate the routes and travel distances
         public double calculateFlightDistance(UAMStation originStation, UAMStation destStation) {
             return Math.sqrt(Math.pow(originStation.getLocationLink().getCoord().getX() - destStation.getLocationLink().getCoord().getX(), 2) + Math.pow(originStation.getLocationLink().getCoord().getY() - destStation.getLocationLink().getCoord().getY(), 2));
+        }
+
+        // setOriginStation
+        public void setOriginStation(UAMStation station) {
+            this.origStation = station;
+        }
+        // setDestinationStation
+        public void setDestinationStation(UAMStation station) {
+            this.destStation = station;
         }
 
         // getDepartureTime

@@ -80,6 +80,11 @@ public class GeneticAlgorithm {
         subTrips = extractSubTrips(dataLoader.getUamTrips());
         //vehicles = dataLoader.getVehicles();
         stations = dataLoader.getStations();
+        // Initialize the origin station and destination station for each trip
+        for(UAMTrip uamTrip: subTrips){
+            uamTrip.setOriginStation(findNearestStation(uamTrip, stations, true));
+            uamTrip.setDestinationStation(findNearestStation(uamTrip, stations, false));
+        }
         saveStationVehicleNumber(subTrips);
         tripVehicleMap = findNearbyVehiclesToTrips(subTrips);
 
