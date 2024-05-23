@@ -474,8 +474,8 @@ public class GeneticAlgorithm {
         for (int[] individual : population) {
             double fitness = calculateFitness(individual, false);
             // Only consider adding if the new solution is better than the worst in the heap
-            if (fitness == solutionsHeap.peek().getFitness()) {
-                if (solutionsHeap.size() > POP_SIZE) {
+            if (fitness > solutionsHeap.peek().getFitness()) {
+                if (solutionsHeap.size() == POP_SIZE) {
                     solutionsHeap.poll(); // Remove the solution with the lowest fitness
                     solutionsHeap.add(new SolutionFitnessPair(individual, fitness)); // Add the new better solution
                 } else {
