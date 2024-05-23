@@ -66,7 +66,7 @@ public class GeneticAlgorithm {
     private static Map<String, Map<UAMVehicle, Integer>> tripVehicleMap = null;
 
     // Data container for outputs
-    private static final PriorityQueue<SolutionFitnessPair> solutionsHeap = new PriorityQueue<>(Comparator.comparingDouble(SolutionFitnessPair::getFitness).reversed());
+    private static final PriorityQueue<SolutionFitnessPair> solutionsHeap = new PriorityQueue<>(Comparator.comparingDouble(SolutionFitnessPair::getFitness));
     private static final Map<String, Double> finalSolutionTravelTimeChanges = new HashMap<>(); // Additional field to store travel time change of each trip for the final best feasible solution
     private static final Map<String, Double> finalSolutionFlightDistanceChanges = new HashMap<>(); // Additional field to store saved flight distance of each trip for the final best feasible solution
     private static final Map<String, Double> finalSolutionDepartureRedirectionRate = new HashMap<>(); // Additional field to store redirection rate of each trip for the final best feasible solution
@@ -488,7 +488,7 @@ public class GeneticAlgorithm {
     private static SolutionFitnessPair findFeasibleSolution(PriorityQueue<SolutionFitnessPair> originalSolutionsHeap) {
         // Create a new priority queue that is a copy of the original but sorted in descending order by fitness
         PriorityQueue<SolutionFitnessPair> solutionsHeapCopy = new PriorityQueue<>(
-                Comparator.comparingDouble(SolutionFitnessPair::getFitness).reversed()
+                Comparator.comparingDouble(SolutionFitnessPair::getFitness)
         );
         solutionsHeapCopy.addAll(originalSolutionsHeap);
 
