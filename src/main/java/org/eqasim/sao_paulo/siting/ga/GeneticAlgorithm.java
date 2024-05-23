@@ -105,9 +105,10 @@ public class GeneticAlgorithm {
         int[] bestFeasibleSolution = bestFeasibleSolutionFitnessPair.getSolution();
         System.out.println("Best feasible solution: " + Arrays.toString(bestFeasibleSolution));
         System.out.println("The fitness of the best feasible solution: " + bestFeasibleSolutionFitnessPair.getFitness());
-        // Calculate and print the performance indicator
+
+        // Calculate and print the performance indicators
         calculateFitness(bestFeasibleSolution, true);
-        printPerformanceIndicators();
+        printPerformanceIndicators(bestFeasibleSolution);
 
         // Print the NUMBER_OF_TRIPS_LONGER_THAN
         System.out.println("Threshold for trips longer than " + THRESHOLD_FOR_TRIPS_LONGER_THAN_STRING + ": " + NUMBER_OF_TRIPS_LONGER_TAHN);
@@ -529,7 +530,23 @@ public class GeneticAlgorithm {
         return bestFitness;
     }
     // Method to calculate and print the performance indicators
-    private static void printPerformanceIndicators() {
+    private static void printPerformanceIndicators(int[] solution) {
+        // Method to calculate and print the number of vehicles by capacity
+        Map<Integer, Integer> capacityCount = countVehicleCapacities(solution);
+        Set<Integer> uniqueVehicles = new HashSet<>();
+        for (int vehicleId : solution) {
+            uniqueVehicles.add(vehicleId);
+        }
+        int totalVehicles = uniqueVehicles.size();
+
+        System.out.println("Vehicle Capacity Rates:");
+        for (int capacity = 0; capacity <= VEHICLE_CAPACITY; capacity++) {
+            int count = capacityCount.getOrDefault(capacity, 0);
+            double rate = (double) count / totalVehicles;
+            System.out.println("Capacity " + capacity + ": " + count + " vehicles, Rate: " + rate);
+        }
+
+
         Collection<Double> travelTimeChanges = finalSolutionTravelTimeChanges.values();
         List<Double> sortedTravelTimeChanges = new ArrayList<>(travelTimeChanges);
         Collections.sort(sortedTravelTimeChanges);
@@ -592,6 +609,20 @@ public class GeneticAlgorithm {
         System.out.println("Average arrival redirection rate: " + averageArrivalRedirectionRate);
         System.out.println("5th percentile of arrival redirection rate: " + percentile5thArrivalRedirectionRate);
         System.out.println("95th percentile of arrival redirection rate: " + percentile95thArrivalRedirectionRate);
+    }
+    // Method to count the vehicles by capacity
+    private static Map<Integer, Integer> countVehicleCapacities(int[] solution) {
+        Map<Integer, Integer> vehicleLoadCount = new HashMap<>();
+        for (int vehicleId : solution) {
+            vehicleLoadCount.put(vehicleId, vehicleLoadCount.getOrDefault(vehicleId, 0) + 1);
+        }
+
+        Map<Integer, Integer> capacityCount = new HashMap<>();
+        for (int load : vehicleLoadCount.values()) {
+            capacityCount.put(load, capacityCount.getOrDefault(load, 0) + 1);
+        }
+
+        return capacityCount;
     }
 
     // Initial data extraction methods =================================================================================
