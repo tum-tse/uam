@@ -126,9 +126,9 @@ public class GeneticAlgorithm {
     private static int[] generateIndividual() {
         int[] individual = new int[subTrips.size()];
         for (int i = 0; i < individual.length; i++) {
-            resetVehicleCapacities(tripVehicleMap); // Reset the vehicle capacity since capacity of vehicles will be updated during each individual generation
             assignAvailableVehicle(i, individual);
         }
+        resetVehicleCapacities(tripVehicleMap); // Reset the vehicle capacity since capacity of vehicles will be updated during each individual generation
         return individual;
     }
 
@@ -198,10 +198,10 @@ public class GeneticAlgorithm {
     private static int[] mutate(int[] individual) {
         for (int i = 0; i < individual.length; i++) {
             if (rand.nextDouble() < MUTATION_RATE) {
-                resetVehicleCapacities(tripVehicleMap); // Reset the vehicle capacity since capacity of vehicles will be updated during each individual generation
                 assignAvailableVehicle(i, individual);
             }
         }
+        resetVehicleCapacities(tripVehicleMap); // Reset the vehicle capacity since capacity of vehicles will be updated during each individual generation
         return individual;
     }
 
