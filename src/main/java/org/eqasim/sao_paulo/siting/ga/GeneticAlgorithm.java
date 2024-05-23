@@ -488,7 +488,7 @@ public class GeneticAlgorithm {
     private static SolutionFitnessPair findFeasibleSolution() {
         // Create a new priority queue that is a copy of the original but sorted in descending order by fitness
         PriorityQueue<SolutionFitnessPair> solutionsHeapCopy = new PriorityQueue<>(
-                Comparator.comparingDouble(SolutionFitnessPair::getFitness)
+                Comparator.comparingDouble(SolutionFitnessPair::getFitness).reversed()
         );
         solutionsHeapCopy.addAll(solutionsHeap);
 
