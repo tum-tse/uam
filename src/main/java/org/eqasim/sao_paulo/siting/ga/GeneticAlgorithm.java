@@ -90,18 +90,18 @@ public class GeneticAlgorithm {
                 double fitness = calculateFitness(individual, false);
                 solutionsHeap.add(new SolutionFitnessPair(individual, fitness));
             }
-            System.out.println("Generation " + "0" + ": Best fitness = " + solutionsHeap.peek().getFitness());
+            System.out.println("Generation " + "0" + ": Best fitness = " + findBestFitness(population));
         }
 
         // GA iterations
         for (int gen = 1; gen < MAX_GENERATIONS; gen++) {
             population = evolvePopulation(population, gen);
-            updateSolutionsHeap(population);
+            updateSolutionsHeap(population, solutionsHeap);
             System.out.println("Generation " + gen + ": Best fitness = " + findBestFitness(population));
         }
 
         // Find the best feasible solution at the end of GA execution without altering the original solutions heap
-        SolutionFitnessPair bestFeasibleSolutionFitnessPair = findFeasibleSolution(solutionsHeap);
+        SolutionFitnessPair bestFeasibleSolutionFitnessPair = findFeasibleSolution();
         int[] bestFeasibleSolution = bestFeasibleSolutionFitnessPair.getSolution();
         System.out.println("Best feasible solution: " + Arrays.toString(bestFeasibleSolution));
         System.out.println("The fitness of the best feasible solution: " + bestFeasibleSolutionFitnessPair.getFitness());
@@ -469,7 +469,7 @@ public class GeneticAlgorithm {
         }
     }
     // New method to update the solutions heap
-    private static void updateSolutionsHeap(int[][] population) {
+    private static void updateSolutionsHeap(int[][] population, PriorityQueue<SolutionFitnessPair> solutionsHeap) {
         for (int[] individual : population) {
             double fitness = calculateFitness(individual, false);
             // Only consider adding if the new solution is better than the worst in the heap
@@ -485,12 +485,12 @@ public class GeneticAlgorithm {
         }
     }
     // Method to find the first feasible solution from the priority queue without altering the original heap
-    private static SolutionFitnessPair findFeasibleSolution(PriorityQueue<SolutionFitnessPair> originalSolutionsHeap) {
+    private static SolutionFitnessPair findFeasibleSolution() {
         // Create a new priority queue that is a copy of the original but sorted in descending order by fitness
         PriorityQueue<SolutionFitnessPair> solutionsHeapCopy = new PriorityQueue<>(
                 Comparator.comparingDouble(SolutionFitnessPair::getFitness)
         );
-        solutionsHeapCopy.addAll(originalSolutionsHeap);
+        solutionsHeapCopy.addAll(solutionsHeap);
 
         // Iterate through the copied solutions heap to find a feasible solution
         while (!solutionsHeapCopy.isEmpty()) {
