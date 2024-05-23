@@ -69,6 +69,8 @@ public class GeneticAlgorithm {
     private static final PriorityQueue<SolutionFitnessPair> solutionsHeap = new PriorityQueue<>(Comparator.comparingDouble(SolutionFitnessPair::getFitness).reversed());
     private static final Map<String, Double> finalSolutionTravelTimeChanges = new HashMap<>(); // Additional field to store travel time change of each trip for the final best feasible solution
     private static final Map<String, Double> finalSolutionFlightDistanceChanges = new HashMap<>(); // Additional field to store saved flight distance of each trip for the final best feasible solution
+    private static final Map<String, Double> finalSolutionDepartureRedirectionRate = new HashMap<>(); // Additional field to store redirection rate of each trip for the final best feasible solution
+    private static final Map<String, Double> finalSolutionArrivalRedirectionRate = new HashMap<>(); // Additional field to store redirection rate of each trip for the final best feasible solution
 
     // Main method to run the GA =======================================================================================
     public static void main(String[] args) throws IOException {
@@ -346,6 +348,12 @@ public class GeneticAlgorithm {
                 if(isFinalBestFeasibleSolution){
                     finalSolutionTravelTimeChanges.put(trip.getTripId(), tripTimeChange);
                 }
+                if(isFinalBestFeasibleSolution){
+                    double departureRedirectionRate = ( trip.calculateAccessTeleportationDistance(originStationOfVehicle) - trip.calculateAccessTeleportationDistance(trip.getOriginStation()) ) / ( trip.calculateAccessTeleportationDistance(trip.getOriginStation()) );
+                    finalSolutionDepartureRedirectionRate.put(trip.getTripId(), departureRedirectionRate);
+                    double arrivalRedirectionRate = ( trip.calculateEgressTeleportationDistance(destinationStationOfVehicle) - trip.calculateEgressTeleportationDistance(trip.getDestinationStation()) ) / ( trip.calculateEgressTeleportationDistance(trip.getDestinationStation()) );
+                    finalSolutionArrivalRedirectionRate.put(trip.getTripId(), arrivalRedirectionRate);
+                }
             }
             //add penalty for the case when vehicle capacity is violated
             if(trips.size()>VEHICLE_CAPACITY){
@@ -384,6 +392,12 @@ public class GeneticAlgorithm {
         tripTimeChange += travelTimeChangeDueToEgressMatching;
         if(isFinalBestFeasibleSolution){
             finalSolutionTravelTimeChanges.put(trip.getTripId(), tripTimeChange);
+        }
+        if(isFinalBestFeasibleSolution){
+            double departureRedirectionRate = ( trip.calculateAccessTeleportationDistance(originStationOfVehicle) - trip.calculateAccessTeleportationDistance(trip.getOriginStation()) ) / ( trip.calculateAccessTeleportationDistance(trip.getOriginStation()) );
+            finalSolutionDepartureRedirectionRate.put(trip.getTripId(), departureRedirectionRate);
+            double arrivalRedirectionRate = ( trip.calculateEgressTeleportationDistance(destinationStationOfVehicle) - trip.calculateEgressTeleportationDistance(trip.getDestinationStation()) ) / ( trip.calculateEgressTeleportationDistance(trip.getDestinationStation()) );
+            finalSolutionArrivalRedirectionRate.put(trip.getTripId(), arrivalRedirectionRate);
         }
         return fitness;
     }
@@ -545,6 +559,38 @@ public class GeneticAlgorithm {
         System.out.println("Average flight distance change: " + averageFlightDistance);
         System.out.println("5th percentile of flight distance change: " + percentile5thFlightDistance);
         System.out.println("95th percentile of flight distance change: " + percentile95thFlightDistance);
+
+
+        Collection<Double> departureRedirectionRates = finalSolutionDepartureRedirectionRate.values();
+        List<Double> sortedDepartureRedirectionRates = new ArrayList<>(departureRedirectionRates);
+        Collections.sort(sortedDepartureRedirectionRates);
+
+        double averageDepartureRedirectionRate = sortedDepartureRedirectionRates.stream()
+                .mapToDouble(Double::doubleValue)
+                .average()
+                .orElse(Double.NaN);
+        double percentile5thDepartureRedirectionRate = sortedDepartureRedirectionRates.get((int) (0.05 * sortedDepartureRedirectionRates.size()));
+        double percentile95thDepartureRedirectionRate = sortedDepartureRedirectionRates.get((int) (0.95 * sortedDepartureRedirectionRates.size()) - 1);
+
+        System.out.println("Average departure redirection rate: " + averageDepartureRedirectionRate);
+        System.out.println("5th percentile of departure redirection rate: " + percentile5thDepartureRedirectionRate);
+        System.out.println("95th percentile of departure redirection rate: " + percentile95thDepartureRedirectionRate);
+
+
+        Collection<Double> arrivalRedirectionRates = finalSolutionArrivalRedirectionRate.values();
+        List<Double> sortedArrivalRedirectionRates = new ArrayList<>(arrivalRedirectionRates);
+        Collections.sort(sortedArrivalRedirectionRates);
+
+        double averageArrivalRedirectionRate = sortedArrivalRedirectionRates.stream()
+                .mapToDouble(Double::doubleValue)
+                .average()
+                .orElse(Double.NaN);
+        double percentile5thArrivalRedirectionRate = sortedArrivalRedirectionRates.get((int) (0.05 * sortedArrivalRedirectionRates.size()));
+        double percentile95thArrivalRedirectionRate = sortedArrivalRedirectionRates.get((int) (0.95 * sortedArrivalRedirectionRates.size()) - 1);
+
+        System.out.println("Average arrival redirection rate: " + averageArrivalRedirectionRate);
+        System.out.println("5th percentile of arrival redirection rate: " + percentile5thArrivalRedirectionRate);
+        System.out.println("95th percentile of arrival redirection rate: " + percentile95thArrivalRedirectionRate);
     }
 
     // Initial data extraction methods =================================================================================
