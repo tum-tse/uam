@@ -22,10 +22,10 @@ public class GeneticAlgorithm {
     private static final double CROSSOVER_RATE = 0.7; // Crossover rate
     private static final int TOURNAMENT_SIZE = 5; // Tournament size for selection
 
-    private static final double ALPHA = - 100.0; // Weight for changed flight distances
-    private static final double BETA = - 1; // Weight for change in travel time
+    private static final double ALPHA = - 10.0; // Weight for changed flight distances
+    private static final double BETA = - 0.1; // Weight for change in travel time
     private static final double BETA_NONE_POOLED_TRIP_EARLIER_DEPARTURE = - 0.1; //TODO: need to reconsider the value
-    private static final double PENALTY_FOR_VEHICLE_CAPACITY_VIOLATION = -1000000;
+    private static final double PENALTY_FOR_VEHICLE_CAPACITY_VIOLATION = -10000;
 
     private static final long SEED = 4711; // MATSim default Random Seed
     private static final Random rand = new Random(SEED);
@@ -96,12 +96,12 @@ public class GeneticAlgorithm {
         // GA iterations
         for (int gen = 1; gen < MAX_GENERATIONS; gen++) {
             population = evolvePopulation(population, gen);
-            updateSolutionsHeap(population, solutionsHeap);
+            updateSolutionsHeap(population);
             System.out.println("Generation " + gen + ": Best fitness = " + findBestFitness(population));
         }
 
         // Find the best feasible solution at the end of GA execution without altering the original solutions heap
-        SolutionFitnessPair bestFeasibleSolutionFitnessPair = findFeasibleSolution();
+        SolutionFitnessPair bestFeasibleSolutionFitnessPair = findBestFeasibleSolution();
         int[] bestFeasibleSolution = bestFeasibleSolutionFitnessPair.getSolution();
         System.out.println("Best feasible solution: " + Arrays.toString(bestFeasibleSolution));
         System.out.println("The fitness of the best feasible solution: " + bestFeasibleSolutionFitnessPair.getFitness());
@@ -470,23 +470,22 @@ public class GeneticAlgorithm {
         }
     }
     // New method to update the solutions heap
-    private static void updateSolutionsHeap(int[][] population, PriorityQueue<SolutionFitnessPair> solutionsHeap) {
+    private static void updateSolutionsHeap(int[][] population) {
         for (int[] individual : population) {
             double fitness = calculateFitness(individual, false);
             // Only consider adding if the new solution is better than the worst in the heap
-            if (fitness > solutionsHeap.peek().getFitness()) {
+            if (fitness == solutionsHeap.peek().getFitness()) {
                 if (solutionsHeap.size() > POP_SIZE) {
                     solutionsHeap.poll(); // Remove the solution with the lowest fitness
-                    throw new IllegalArgumentException("Need to handle the case when the heap size exceeds the population size.");
-                } else {
-                    solutionsHeap.poll(); // Remove the solution with the lowest fitness
                     solutionsHeap.add(new SolutionFitnessPair(individual, fitness)); // Add the new better solution
+                } else {
+                    throw new IllegalArgumentException("Need to handle the case when the heap size exceeds the population size.");
                 }
             }
         }
     }
     // Method to find the first feasible solution from the priority queue without altering the original heap
-    private static SolutionFitnessPair findFeasibleSolution() {
+    private static SolutionFitnessPair findBestFeasibleSolution() {
         // Create a new priority queue that is a copy of the original but sorted in descending order by fitness
         PriorityQueue<SolutionFitnessPair> solutionsHeapCopy = new PriorityQueue<>(
                 Comparator.comparingDouble(SolutionFitnessPair::getFitness).reversed()
