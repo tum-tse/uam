@@ -222,7 +222,7 @@ public class Utils {
         private final String purpose, income;
         private double accessTimeToPooledStation; // Time for access to the station
 
-        UAMTrip(String tripId, double originX, double originY, double destX, double destY, double departureTime, double flightDistance, UAMStation origStation, UAMStation destStation, String purpose, String income) {
+        public UAMTrip(String tripId, double originX, double originY, double destX, double destY, double departureTime, double flightDistance, UAMStation origStation, UAMStation destStation, String purpose, String income) {
             this.tripId = tripId;
             this.originX = originX;
             this.originY = originY;

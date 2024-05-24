@@ -6,6 +6,11 @@ import org.eqasim.sao_paulo.siting.Utils.*;
 import java.io.IOException;
 import java.util.*;
 import java.util.stream.Collectors;
+import java.nio.file.Files;
+import java.nio.file.Paths;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.stream.Stream;
 
 import net.bhl.matsim.uam.infrastructure.UAMVehicle;
 import org.matsim.contrib.dvrp.fleet.DvrpVehicle;
@@ -77,9 +82,17 @@ public class GeneticAlgorithm {
         // Load data
         DataLoader dataLoader = new DataLoader();
         dataLoader.loadAllData();
-        subTrips = extractSubTrips(dataLoader.getUamTrips());
+        //subTrips = extractSubTrips(dataLoader.getUamTrips());
         //vehicles = dataLoader.getVehicles();
         stations = dataLoader.getStations();
+
+        String filePath = "/home/tumtse/Documents/haowu/uam/uam/scenarios/1-percent/sao_paulo_population2trips.csv";
+        subTrips = readTripsFromCsv(filePath);
+        //Randomly select 10% trips from the list of subTrips
+        subTrips = subTrips.stream()
+                .filter(trip -> rand.nextDouble() < 0.1)
+                .collect(Collectors.toCollection(ArrayList::new));
+
         // Initialize the origin station and destination station for each trip
         for(UAMTrip uamTrip: subTrips){
             uamTrip.setOriginStation(findNearestStation(uamTrip, stations, true));
@@ -721,6 +734,40 @@ public class GeneticAlgorithm {
             }
         }
         return nearestStation;
+    }
+
+    // read demand =====================================================================================================
+    public static List<UAMTrip> readTripsFromCsv(String filePath) {
+        List<UAMTrip> trips = new ArrayList<>();
+
+        try (Stream<String> lines = Files.lines(Paths.get(filePath))) {
+            trips = lines
+                    .skip(1) // Skip header line
+                    .map(GeneticAlgorithm::parseTrip)
+                    .collect(Collectors.toList());
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+
+        return trips;
+    }
+    private static UAMTrip parseTrip(String line) {
+        String[] fields = line.split(",");
+        String tripId = fields[0];
+        double originX = Double.parseDouble(fields[1]);
+        double originY = Double.parseDouble(fields[2]);
+        double destX = Double.parseDouble(fields[3]);
+        double destY = Double.parseDouble(fields[4]);
+        double departureTime = Double.parseDouble(fields[5]);
+        String purpose = fields[6];
+
+        // Default values for optional fields
+        double flightDistance = 0.0;
+        UAMStation origStation = null;
+        UAMStation destStation = null;
+        String income = "0";
+
+        return new UAMTrip(tripId, originX, originY, destX, destY, departureTime, flightDistance, origStation, destStation, purpose, income);
     }
 
 }
