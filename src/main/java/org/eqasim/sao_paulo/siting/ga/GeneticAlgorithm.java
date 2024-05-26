@@ -771,4 +771,5 @@ public class GeneticAlgorithm {
     }
 
 }
+//TODO: To sort trips based on their origin station and destination station?
 //TODO: Need use the best solution starting from the crossover_disable_after iteration to generate new solutions for remaining iterations
