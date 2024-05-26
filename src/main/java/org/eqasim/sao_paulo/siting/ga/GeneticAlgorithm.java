@@ -40,7 +40,7 @@ public class GeneticAlgorithm {
     private static int FIRST_UAM_VEHICLE_ID = 1;
     private static final int VALUE_FOR_NO_VEHICLE_AVAILABLE = -1; // For example, using -1 as an indicator of no vehicle available for a trip
     private static final double END_SERVICE_TIME_OF_THE_DAY = 3600*36; // End service time of the day
-    private static final double VEHICLE_CRUISE_SPEED = 180000.0 / 3600.0; // Vehicle cruise speed in m/s
+    private static final double VEHICLE_CRUISE_SPEED = 350000.0 / 3600.0; // Vehicle cruise speed in m/s
     private static final int VEHICLE_CAPACITY = 4; // Vehicle capacity
 
     // Variables for the UAM problem ===================================================================================
@@ -77,6 +77,9 @@ public class GeneticAlgorithm {
     private static final Map<String, Double> finalSolutionFlightDistanceChanges = new HashMap<>(); // Additional field to store saved flight distance of each trip for the final best feasible solution
     private static final Map<String, Double> finalSolutionDepartureRedirectionRate = new HashMap<>(); // Additional field to store redirection rate of each trip for the final best feasible solution
     private static final Map<String, Double> finalSolutionArrivalRedirectionRate = new HashMap<>(); // Additional field to store redirection rate of each trip for the final best feasible solution
+    private static final Map<String, Double> finalSolutionTotalTravelTime = new HashMap<>(); // Additional field to store total travel time of each trip for the final best feasible solution
+    private static final Map<String, String> finalSolutionAssignedAccessStation = new HashMap<>(); // Additional field to store assigned access station of each trip for the final best feasible solution
+    private static final Map<String, String> finalSolutionAssignedEgressStation = new HashMap<>(); // Additional field to store assigned egress station of each trip for the final best feasible solution
 
     // Main method to run the GA =======================================================================================
     public static void main(String[] args) throws IOException {
@@ -339,6 +342,7 @@ public class GeneticAlgorithm {
 
                 double tripTimeChange = 0.0;
                 double tripFlightDistanceChange = 0.0;
+                double tripTotalTravelTime = 0.0;
 
                 // calculate change in flight distance
                 double flightDistanceChange = getFlightDistanceChange(trip, originStationOfVehicle, destinationStationOfVehicle);
@@ -375,6 +379,16 @@ public class GeneticAlgorithm {
                     finalSolutionDepartureRedirectionRate.put(trip.getTripId(), departureRedirectionRate);
                     double arrivalRedirectionRate = ( trip.calculateEgressTeleportationDistance(destinationStationOfVehicle) - trip.calculateEgressTeleportationDistance(trip.getDestinationStation()) ) / ( trip.calculateEgressTeleportationDistance(trip.getDestinationStation()) );
                     finalSolutionArrivalRedirectionRate.put(trip.getTripId(), arrivalRedirectionRate);
+
+                    // total travel time for the trip
+                    //TODO: Should the accessTime = boardingTimeForAllTrips - trip.getDepartureTime()?
+                    tripTotalTravelTime = trip.calculateAccessTeleportationTime(originStationOfVehicle) + trip.calculateFlightDistance(originStationOfVehicle, destinationStationOfVehicle) / VEHICLE_CRUISE_SPEED + trip.calculateEgressTeleportationTime(destinationStationOfVehicle);
+                    finalSolutionTotalTravelTime.put(trip.getTripId(), tripTotalTravelTime);
+
+                    // assigned origin station
+                    finalSolutionAssignedAccessStation.put(trip.getTripId(), originStationOfVehicle.getId().toString());
+                    // assigned destination station
+                    finalSolutionAssignedEgressStation.put(trip.getTripId(), destinationStationOfVehicle.getId().toString());
                 }
             }
             //add penalty for the case when vehicle capacity is violated
@@ -420,6 +434,15 @@ public class GeneticAlgorithm {
             finalSolutionDepartureRedirectionRate.put(trip.getTripId(), departureRedirectionRate);
             double arrivalRedirectionRate = ( trip.calculateEgressTeleportationDistance(destinationStationOfVehicle) - trip.calculateEgressTeleportationDistance(trip.getDestinationStation()) ) / ( trip.calculateEgressTeleportationDistance(trip.getDestinationStation()) );
             finalSolutionArrivalRedirectionRate.put(trip.getTripId(), arrivalRedirectionRate);
+
+            // total travel time for the trip
+            double totalTravelTime = trip.calculateAccessTeleportationTime(originStationOfVehicle) + trip.calculateFlightDistance(originStationOfVehicle, destinationStationOfVehicle) / VEHICLE_CRUISE_SPEED + trip.calculateEgressTeleportationTime(destinationStationOfVehicle);
+            finalSolutionTotalTravelTime.put(trip.getTripId(), totalTravelTime);
+
+            // assigned origin station
+            finalSolutionAssignedAccessStation.put(trip.getTripId(), originStationOfVehicle.getId().toString());
+            // assigned destination station
+            finalSolutionAssignedEgressStation.put(trip.getTripId(), destinationStationOfVehicle.getId().toString());
         }
         return fitness;
     }
@@ -631,7 +654,7 @@ public class GeneticAlgorithm {
     // Method to print statistics to a CSV file
     private static void printStatisticsToCsv(int[] solution, String fileName) {
         try (FileWriter writer = new FileWriter(fileName)) {
-            writer.append("TripId,TravelTimeChange,FlightDistanceChange,DepartureRedirectionRate,ArrivalRedirectionRate\n");
+            writer.append("TripId,AccessStationId,EgressStationId,TotalTravelTime,TravelTimeChange,FlightDistanceChange,DepartureRedirectionRate,ArrivalRedirectionRate\n");
             for (int i = 0; i < solution.length; i++) {
                 UAMTrip trip = subTrips.get(i);
                 String tripId = trip.getTripId();
@@ -639,9 +662,12 @@ public class GeneticAlgorithm {
                 double flightDistanceChange = finalSolutionFlightDistanceChanges.getOrDefault(tripId, 0.0);
                 double departureRedirectionRate = finalSolutionDepartureRedirectionRate.getOrDefault(tripId, 0.0);
                 double arrivalRedirectionRate = finalSolutionArrivalRedirectionRate.getOrDefault(tripId, 0.0);
+                String assignedAccessStation = finalSolutionAssignedAccessStation.getOrDefault(tripId, "N/A");
+                String assignedEgressStation = finalSolutionAssignedEgressStation.getOrDefault(tripId, "N/A");
+                double totalTravelTime = finalSolutionTotalTravelTime.getOrDefault(tripId, 0.0);
 
-                writer.append(String.format("%s,%.2f,%.2f,%.2f,%.2f\n",
-                        tripId, travelTimeChange, flightDistanceChange, departureRedirectionRate, arrivalRedirectionRate));
+                writer.append(String.format("%s,%s,%s,%.2f,%.2f,%.2f,%.2f,%.2f\n",
+                        tripId, assignedAccessStation, assignedEgressStation, totalTravelTime, travelTimeChange, flightDistanceChange, departureRedirectionRate, arrivalRedirectionRate));
             }
         } catch (IOException e) {
             e.printStackTrace();
