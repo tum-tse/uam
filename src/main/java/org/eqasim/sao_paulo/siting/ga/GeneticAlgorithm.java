@@ -11,6 +11,7 @@ import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Stream;
+import java.io.FileWriter;
 
 import net.bhl.matsim.uam.infrastructure.UAMVehicle;
 import org.matsim.contrib.dvrp.fleet.DvrpVehicle;
@@ -82,16 +83,17 @@ public class GeneticAlgorithm {
         // Load data
         DataLoader dataLoader = new DataLoader();
         dataLoader.loadAllData();
-        //subTrips = extractSubTrips(dataLoader.getUamTrips());
-        //vehicles = dataLoader.getVehicles();
-        stations = dataLoader.getStations();
 
-        String filePath = "/home/tumtse/Documents/haowu/uam/uam/scenarios/1-percent/sao_paulo_population2trips.csv";
+        subTrips = extractSubTrips(dataLoader.getUamTrips());
+        /*        String filePath = "/home/tumtse/Documents/haowu/uam/uam/scenarios/1-percent/sao_paulo_population2trips.csv";
         subTrips = readTripsFromCsv(filePath);
         //Randomly select 10% trips from the list of subTrips
         subTrips = subTrips.stream()
                 .filter(trip -> rand.nextDouble() < 0.1)
-                .collect(Collectors.toCollection(ArrayList::new));
+                .collect(Collectors.toCollection(ArrayList::new));*/
+
+        //vehicles = dataLoader.getVehicles();
+        stations = dataLoader.getStations();
 
         // Initialize the origin station and destination station for each trip
         for(UAMTrip uamTrip: subTrips){
@@ -126,7 +128,7 @@ public class GeneticAlgorithm {
 
         // Calculate and print the performance indicators
         calculateFitness(bestFeasibleSolution, true);
-        printPerformanceIndicators(bestFeasibleSolution);
+        printPerformanceIndicators(bestFeasibleSolution, "src/main/java/org/eqasim/sao_paulo/siting/ga/trip_statistics.csv");
 
         // Print the NUMBER_OF_TRIPS_LONGER_THAN
         System.out.println("Threshold for trips longer than " + THRESHOLD_FOR_TRIPS_LONGER_THAN_STRING + ": " + NUMBER_OF_TRIPS_LONGER_TAHN);
@@ -547,7 +549,7 @@ public class GeneticAlgorithm {
         return bestFitness;
     }
     // Method to calculate and print the performance indicators
-    private static void printPerformanceIndicators(int[] solution) {
+    private static void printPerformanceIndicators(int[] solution, String tripStatisticsCSVFile) {
         // Method to calculate and print the number of vehicles by capacity
         Map<Integer, Integer> capacityCount = countVehicleCapacities(solution);
         Set<Integer> uniqueVehicles = new HashSet<>();
@@ -562,7 +564,6 @@ public class GeneticAlgorithm {
             double rate = (double) count / totalVehicles;
             System.out.println("Capacity " + capacity + ": " + count + " vehicles, Rate: " + rate);
         }
-
 
         Collection<Double> travelTimeChanges = finalSolutionTravelTimeChanges.values();
         List<Double> sortedTravelTimeChanges = new ArrayList<>(travelTimeChanges);
@@ -579,7 +580,6 @@ public class GeneticAlgorithm {
         System.out.println("5th percentile of travel time change: " + percentile5thTravelTime);
         System.out.println("95th percentile of travel time change: " + percentile95thTravelTime);
 
-
         Collection<Double> flightDistanceChanges = finalSolutionFlightDistanceChanges.values();
         List<Double> sortedFlightDistanceChanges = new ArrayList<>(flightDistanceChanges);
         Collections.sort(sortedFlightDistanceChanges);
@@ -594,7 +594,6 @@ public class GeneticAlgorithm {
         System.out.println("Average flight distance change: " + averageFlightDistance);
         System.out.println("5th percentile of flight distance change: " + percentile5thFlightDistance);
         System.out.println("95th percentile of flight distance change: " + percentile95thFlightDistance);
-
 
         Collection<Double> departureRedirectionRates = finalSolutionDepartureRedirectionRate.values();
         List<Double> sortedDepartureRedirectionRates = new ArrayList<>(departureRedirectionRates);
@@ -611,7 +610,6 @@ public class GeneticAlgorithm {
         System.out.println("5th percentile of departure redirection rate: " + percentile5thDepartureRedirectionRate);
         System.out.println("95th percentile of departure redirection rate: " + percentile95thDepartureRedirectionRate);
 
-
         Collection<Double> arrivalRedirectionRates = finalSolutionArrivalRedirectionRate.values();
         List<Double> sortedArrivalRedirectionRates = new ArrayList<>(arrivalRedirectionRates);
         Collections.sort(sortedArrivalRedirectionRates);
@@ -626,6 +624,28 @@ public class GeneticAlgorithm {
         System.out.println("Average arrival redirection rate: " + averageArrivalRedirectionRate);
         System.out.println("5th percentile of arrival redirection rate: " + percentile5thArrivalRedirectionRate);
         System.out.println("95th percentile of arrival redirection rate: " + percentile95thArrivalRedirectionRate);
+
+        // Print statistics to CSV
+        printStatisticsToCsv(solution, tripStatisticsCSVFile);
+    }
+    // Method to print statistics to a CSV file
+    private static void printStatisticsToCsv(int[] solution, String fileName) {
+        try (FileWriter writer = new FileWriter(fileName)) {
+            writer.append("TripId,TravelTimeChange,FlightDistanceChange,DepartureRedirectionRate,ArrivalRedirectionRate\n");
+            for (int i = 0; i < solution.length; i++) {
+                UAMTrip trip = subTrips.get(i);
+                String tripId = trip.getTripId();
+                double travelTimeChange = finalSolutionTravelTimeChanges.getOrDefault(tripId, 0.0);
+                double flightDistanceChange = finalSolutionFlightDistanceChanges.getOrDefault(tripId, 0.0);
+                double departureRedirectionRate = finalSolutionDepartureRedirectionRate.getOrDefault(tripId, 0.0);
+                double arrivalRedirectionRate = finalSolutionArrivalRedirectionRate.getOrDefault(tripId, 0.0);
+
+                writer.append(String.format("%s,%.2f,%.2f,%.2f,%.2f\n",
+                        tripId, travelTimeChange, flightDistanceChange, departureRedirectionRate, arrivalRedirectionRate));
+            }
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
     }
     // Method to count the vehicles by capacity
     private static Map<Integer, Integer> countVehicleCapacities(int[] solution) {
