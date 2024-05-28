@@ -3,15 +3,16 @@ package org.eqasim.sao_paulo.siting.ga;
 import net.bhl.matsim.uam.infrastructure.UAMStation;
 import org.eqasim.sao_paulo.siting.Utils.*;
 
+import org.apache.log4j.Logger;
+
 import java.io.IOException;
 import java.util.*;
+import java.util.concurrent.*;
 import java.util.stream.Collectors;
 import java.nio.file.Files;
 import java.nio.file.Paths;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.stream.Stream;
 import java.io.FileWriter;
+import java.util.stream.Stream;
 
 import net.bhl.matsim.uam.infrastructure.UAMVehicle;
 import org.matsim.contrib.dvrp.fleet.DvrpVehicle;
@@ -20,6 +21,8 @@ import org.matsim.contrib.dvrp.fleet.ImmutableDvrpVehicleSpecification;
 import org.matsim.api.core.v01.Id;
 
 public class GeneticAlgorithm {
+    private static final Logger log = Logger.getLogger(GeneticAlgorithm.class);
+
     // Genetic Algorithm parameters ====================================================================================
     private static final int MAX_GENERATIONS = 100; // Max number of generations
     private static final int CROSSOVER_DISABLE_AFTER = 100; // New field to control when to stop crossover
@@ -73,6 +76,7 @@ public class GeneticAlgorithm {
 
     // Data container for outputs
     private static final PriorityQueue<SolutionFitnessPair> solutionsHeap = new PriorityQueue<>(Comparator.comparingDouble(SolutionFitnessPair::getFitness));
+    private static final PriorityQueue<SolutionFitnessPair> repairedSolutionsHeap = new PriorityQueue<>(Comparator.comparingDouble(SolutionFitnessPair::getFitness));
     private static final Map<String, Double> finalSolutionTravelTimeChanges = new HashMap<>(); // Additional field to store travel time change of each trip for the final best feasible solution
     private static final Map<String, Double> finalSolutionFlightDistanceChanges = new HashMap<>(); // Additional field to store saved flight distance of each trip for the final best feasible solution
     private static final Map<String, Double> finalSolutionDepartureRedirectionRate = new HashMap<>(); // Additional field to store redirection rate of each trip for the final best feasible solution
@@ -82,7 +86,7 @@ public class GeneticAlgorithm {
     private static final Map<String, String> finalSolutionAssignedEgressStation = new HashMap<>(); // Additional field to store assigned egress station of each trip for the final best feasible solution
 
     // Main method to run the GA =======================================================================================
-    public static void main(String[] args) throws IOException {
+    public static void main(String[] args) throws IOException, InterruptedException {
         // Load data
         DataLoader dataLoader = new DataLoader();
         dataLoader.loadAllData();
@@ -122,6 +126,16 @@ public class GeneticAlgorithm {
             updateSolutionsHeap(population);
             System.out.println("Generation " + gen + ": Best fitness = " + findBestFitness(population));
         }
+
+        // Repair infeasible solutions using Simulated Annealing
+        // Executor service and queue for parallel processing
+        final int numProcessors = Runtime.getRuntime().availableProcessors();
+        ExecutorService executorService = Executors.newFixedThreadPool(numProcessors);
+        ArrayBlockingQueue<SolutionFitnessPair> queue = new ArrayBlockingQueue<>(solutionsHeap.size());
+        repairInfeasibleSolutions(numProcessors, executorService, queue);
+        // Make sure that the file is not written before all threads are finished
+        while (!executorService.isTerminated())
+            Thread.sleep(200);
 
         // Find the best feasible solution at the end of GA execution without altering the original solutions heap
         SolutionFitnessPair bestFeasibleSolutionFitnessPair = findBestFeasibleSolution();
@@ -533,7 +547,7 @@ public class GeneticAlgorithm {
         PriorityQueue<SolutionFitnessPair> solutionsHeapCopy = new PriorityQueue<>(
                 Comparator.comparingDouble(SolutionFitnessPair::getFitness).reversed()
         );
-        solutionsHeapCopy.addAll(solutionsHeap);
+        solutionsHeapCopy.addAll(repairedSolutionsHeap);
 
         // Iterate through the copied solutions heap to find a feasible solution
         while (!solutionsHeapCopy.isEmpty()) {
@@ -559,7 +573,7 @@ public class GeneticAlgorithm {
                 vehicleCapacityViolated++;
             }
         }
-        System.out.println("Number of vehicles with capacity violation: " + vehicleCapacityViolated);
+        //System.out.println("Number of vehicles with capacity violation: " + vehicleCapacityViolated);
         return isFeasible;
     }
 
@@ -818,6 +832,116 @@ public class GeneticAlgorithm {
         String income = "0";
 
         return new UAMTrip(tripId, originX, originY, destX, destY, departureTime, flightDistance, origStation, destStation, purpose, income);
+    }
+
+    // Simulated Annealing to Repair Infeasible Solutions =============================================================
+    private static void repairInfeasibleSolutions(int numProcessors, ExecutorService executorService, ArrayBlockingQueue<SolutionFitnessPair> queue) throws InterruptedException {
+
+        // Add all infeasible solutions to the queue
+        for (SolutionFitnessPair solutionPair : solutionsHeap) {
+            if (!isFeasible(solutionPair.getSolution())) {
+                queue.add(solutionPair);
+            } else {
+                repairedSolutionsHeap.add(solutionPair); //TODO: could also be "simulated annealed" for better performance
+            }
+        }
+
+        //executorService.invokeAll(tasks);
+        // Execute tasks and wait for completion
+        ThreadCounter threadCounter = new ThreadCounter();
+        log.info("Simulated Annealing starts...");
+        int counter = 0;
+        int taskSize = queue.size();
+        log.info("Que size is: " + taskSize);
+        while (!queue.isEmpty()) {
+
+            while (threadCounter.getProcesses() >= numProcessors - 1)
+                Thread.sleep(200);
+
+            SolutionFitnessPair solutionPair = queue.poll();
+            if (solutionPair != null) {
+                executorService.execute(new SimulatedAnnealing(solutionPair.getSolution(), threadCounter));
+            }
+
+            counter++;
+            log.info("Calculation completion: " + counter + "/" + taskSize + " ("
+                    + String.format("%.0f", (double) counter / taskSize * 100) + "%).");
+        }
+        executorService.shutdown();
+    }
+
+    // Simulated Annealing Method
+    static class SimulatedAnnealing implements Runnable {
+        private int[] solution;
+        private ThreadCounter threadCounter;
+        SimulatedAnnealing(int[] solution, ThreadCounter threadCounter){
+            this.solution = solution;
+            this.threadCounter = threadCounter;
+        }
+
+        @Override
+        public void run() {
+            threadCounter.register();
+
+            double temperature = 1000.0;
+            double coolingRate = 0.003;
+
+            int[] currentSolution = Arrays.copyOf(solution, solution.length);
+            int[] bestSolution = Arrays.copyOf(currentSolution, currentSolution.length);
+            double bestFitness = calculateFitness(bestSolution, false);
+
+            while (temperature > 1) {
+                int[] newSolution = Arrays.copyOf(currentSolution, currentSolution.length);
+
+                // Randomly change vehicle assignment to repair the solution
+                int tripIndex = rand.nextInt(newSolution.length);
+                assignAvailableVehicle(tripIndex, newSolution);
+                resetVehicleCapacities(tripVehicleMap); // Reset vehicle capacities
+
+                double currentFitness = calculateFitness(currentSolution, false);
+                double newFitness = calculateFitness(newSolution, false);
+
+                if (acceptanceProbability(currentFitness, newFitness, temperature) > rand.nextDouble()) {
+                    currentSolution = Arrays.copyOf(newSolution, newSolution.length);
+                }
+
+                if (newFitness > bestFitness && isFeasible(newSolution)) {
+                    bestSolution = Arrays.copyOf(newSolution, newSolution.length);
+                    bestFitness = newFitness;
+                }
+
+                temperature *= 1 - coolingRate;
+            }
+
+            double repairedFitness = calculateFitness(bestSolution, false);
+            if (isFeasible(bestSolution)) {
+                repairedSolutionsHeap.add(new SolutionFitnessPair(bestSolution, repairedFitness));
+            }
+
+            threadCounter.deregister();
+        }
+        // Acceptance Probability Calculation for Simulated Annealing
+        private static double acceptanceProbability(double currentFitness, double newFitness, double temperature) {
+            if (newFitness > currentFitness) {
+                return 1.0;
+            }
+            return Math.exp((newFitness - currentFitness) / temperature);
+        }
+    }
+    public static class ThreadCounter {
+        private int processes;
+
+        public synchronized void register() {
+            processes++;
+        }
+
+        public synchronized void deregister() {
+            processes--;
+        }
+
+        public synchronized int getProcesses() {
+            return processes;
+        }
     }
 
 }
