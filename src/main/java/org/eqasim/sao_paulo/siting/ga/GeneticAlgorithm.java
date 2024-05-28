@@ -913,9 +913,8 @@ public class GeneticAlgorithm {
                 temperature *= 1 - coolingRate;
             }
 
-            double repairedFitness = calculateFitness(bestSolution, false);
             if (isFeasible(bestSolution)) {
-                repairedSolutionsHeap.add(new SolutionFitnessPair(bestSolution, repairedFitness));
+                repairedSolutionsHeap.add(new SolutionFitnessPair(bestSolution, bestFitness));
             }
 
             threadCounter.deregister();
