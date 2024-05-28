@@ -547,16 +547,20 @@ public class GeneticAlgorithm {
     }
     // Helper method to check if a solution violates vehicle capacity constraints
     private static boolean isFeasible(int[] solution) {
+        boolean isFeasible = true;
+        int vehicleCapacityViolated = 0;
         Map<Integer, Integer> vehicleLoadCount = new HashMap<>();
         for (int vehicleId : solution) {
             vehicleLoadCount.put(vehicleId, vehicleLoadCount.getOrDefault(vehicleId, 0) + 1);
         }
         for (int load : vehicleLoadCount.values()) {
             if (load > VEHICLE_CAPACITY) {
-                return false;
+                isFeasible = false;
+                vehicleCapacityViolated++;
             }
         }
-        return true;
+        System.out.println("Number of vehicles with capacity violation: " + vehicleCapacityViolated);
+        return isFeasible;
     }
 
     // Performance indicators ==========================================================================================
@@ -818,4 +822,5 @@ public class GeneticAlgorithm {
 
 }
 //TODO: To sort trips based on their origin station and destination station?
+//TODO: 3.	Heuristic-Based Mutation: Implement domain-specific mutations such as swapping vehicle assignments between closely located trips.
 //TODO: Need use the best solution starting from the crossover_disable_after iteration to generate new solutions for remaining iterations
