@@ -20,6 +20,8 @@ import net.bhl.matsim.uam.infrastructure.UAMVehicleType;
 import org.matsim.contrib.dvrp.fleet.ImmutableDvrpVehicleSpecification;
 import org.matsim.api.core.v01.Id;
 
+import java.util.concurrent.ConcurrentHashMap;
+
 public class GeneticAlgorithm {
     private static final Logger log = Logger.getLogger(GeneticAlgorithm.class);
 
@@ -71,7 +73,7 @@ public class GeneticAlgorithm {
     private static final Map<Id<UAMStation>, List<UAMVehicle>> originStationVehicleMap = new HashMap<>();
     private static final Map<Id<DvrpVehicle>, UAMStation> vehicleOriginStationMap = new HashMap<>();
     private static final Map<Id<DvrpVehicle>, UAMStation> vehicleDestinationStationMap = new HashMap<>();
-    private static Map<String, List<UAMVehicle>> tripVehicleMap = null;
+    private static Map<String, List<UAMVehicle>> tripVehicleMap = new ConcurrentHashMap<>(); // Update tripVehicleMap to use ConcurrentHashMap
     //private static final Map<UAMVehicle, Integer> vehicleOccupancyMap = new HashMap<>();
 
     // Data container for outputs
@@ -245,6 +247,7 @@ public class GeneticAlgorithm {
         return individual;
     }
 
+    // Method to assign an available vehicle to a trip
     private static void assignAvailableVehicle(int i, int[] individual) {
         UAMTrip trip = subTrips.get(i);
         List<UAMVehicle> vehicleList = tripVehicleMap.get(trip.getTripId());
@@ -254,16 +257,11 @@ public class GeneticAlgorithm {
         }
 
         //add egress constraint
-        Iterator<UAMVehicle> iterator = vehicleList.iterator();
-        while (iterator.hasNext()) {
-            UAMVehicle vehicle = iterator.next();
-            UAMStation destinationStation = vehicleDestinationStationMap.get(vehicle.getId());
-            if (trip.calculateEgressTeleportationDistance(destinationStation) > SEARCH_RADIUS_DESTINATION) {
-                iterator.remove();
-            }
-        }
+        vehicleList = vehicleList.stream()
+                .filter(vehicle -> trip.calculateEgressTeleportationDistance(vehicleDestinationStationMap.get(vehicle.getId())) <= SEARCH_RADIUS_DESTINATION)
+                .collect(Collectors.toList());
 
-/*        //add occupancy constraint
+        /*        //add occupancy constraint
         if (!vehicleList.isEmpty()) {
             Iterator<UAMVehicle> iterator0 = vehicleList.iterator();
             while (iterator0.hasNext()) {
@@ -275,12 +273,15 @@ public class GeneticAlgorithm {
             }
         }*/
 
-        // ----- add a new vehicle for the trip when there is no available vehicle (i.e., vehicle still has capacity) after checking the egress constraint
-        if (vehicleList.isEmpty()) {
-            UAMVehicle vehicle = feedDataForVehicleCreation(trip, false);
-            vehicleList.add(vehicle);
-            tripVehicleMap.put(trip.getTripId(), vehicleList);
-            //vehicleOccupancyMap.put(vehicle, VEHICLE_CAPACITY);
+        //synchronize the block that checks for empty vehicle list and adds a new vehicle (i.e., vehicle has capacity) after checking the egress constraint
+        synchronized (tripVehicleMap) {
+            // Add a new vehicle for the trip when there is no available vehicle
+            if (vehicleList.isEmpty()) {
+                UAMVehicle vehicle = feedDataForVehicleCreation(trip, false);
+                vehicleList.add(vehicle);
+                tripVehicleMap.put(trip.getTripId(), vehicleList);
+                //vehicleOccupancyMap.put(vehicle, VEHICLE_CAPACITY);
+            }
         }
 
         if (!vehicleList.isEmpty()) {
