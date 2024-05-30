@@ -72,7 +72,7 @@ public class GeneticAlgorithm {
     private static final Map<Id<DvrpVehicle>, UAMStation> vehicleOriginStationMap = new HashMap<>();
     private static final Map<Id<DvrpVehicle>, UAMStation> vehicleDestinationStationMap = new HashMap<>();
     private static Map<String, List<UAMVehicle>> tripVehicleMap = null;
-    private static final Map<UAMVehicle, Integer> vehicleOccupancyMap = new HashMap<>();
+    //private static final Map<UAMVehicle, Integer> vehicleOccupancyMap = new HashMap<>();
 
     // Data container for outputs
     private static final PriorityQueue<SolutionFitnessPair> solutionsHeap = new PriorityQueue<>(Comparator.comparingDouble(SolutionFitnessPair::getFitness));
@@ -164,7 +164,7 @@ public class GeneticAlgorithm {
     private static int[] generateIndividual() {
         int[] individual = new int[subTrips.size()];
         //resetVehicleCapacities(tripVehicleMap); // Reset the vehicle capacity since capacity of vehicles will be updated during each individual generation
-        resetVehicleOccupancy(vehicleOccupancyMap);
+        //resetVehicleOccupancy(vehicleOccupancyMap);
         for (int i = 0; i < individual.length; i++) {
             assignAvailableVehicle(i, individual);
         }
@@ -236,7 +236,7 @@ public class GeneticAlgorithm {
     // Mutation - Randomly change vehicle assignment
     private static int[] mutate(int[] individual) {
         //resetVehicleCapacities(tripVehicleMap); // Reset the vehicle capacity since capacity of vehicles will be updated during each individual generation
-        resetVehicleOccupancy(vehicleOccupancyMap);
+        //resetVehicleOccupancy(vehicleOccupancyMap);
         for (int i = 0; i < individual.length; i++) {
             if (rand.nextDouble() < MUTATION_RATE) {
                 assignAvailableVehicle(i, individual);
@@ -263,7 +263,7 @@ public class GeneticAlgorithm {
             }
         }
 
-        //add occupancy constraint
+/*        //add occupancy constraint
         if (!vehicleList.isEmpty()) {
             Iterator<UAMVehicle> iterator0 = vehicleList.iterator();
             while (iterator0.hasNext()) {
@@ -273,14 +273,14 @@ public class GeneticAlgorithm {
                     iterator0.remove();
                 }
             }
-        }
+        }*/
 
         // ----- add a new vehicle for the trip when there is no available vehicle (i.e., vehicle still has capacity) after checking the egress constraint
         if (vehicleList.isEmpty()) {
             UAMVehicle vehicle = feedDataForVehicleCreation(trip, false);
             vehicleList.add(vehicle);
             tripVehicleMap.put(trip.getTripId(), vehicleList);
-            vehicleOccupancyMap.put(vehicle, VEHICLE_CAPACITY);
+            //vehicleOccupancyMap.put(vehicle, VEHICLE_CAPACITY);
         }
 
         if (!vehicleList.isEmpty()) {
@@ -288,17 +288,13 @@ public class GeneticAlgorithm {
             //add access constraint
             int vehicleIndex = rand.nextInt(vehicleList.size());
             UAMVehicle selectedVehicle = vehicleList.get(vehicleIndex);
-            Integer currentCapacity = vehicleOccupancyMap.get(selectedVehicle);
-            if (currentCapacity > 0) {
-                individual[i] = Integer.parseInt(selectedVehicle.getId().toString());
+            //Integer currentCapacity = vehicleOccupancyMap.get(selectedVehicle);
 
-                // Decrement capacity and explicitly update tripVehicleMap
-                vehicleOccupancyMap.put(selectedVehicle, vehicleOccupancyMap.get(selectedVehicle) - 1);
-            } else {
-                if (currentCapacity < 0){
-                    throw new IllegalArgumentException("Capacity of the selected vehicle is smaller than 1.");
-                }
-            }
+            individual[i] = Integer.parseInt(selectedVehicle.getId().toString());
+
+            // Decrement capacity and explicitly update tripVehicleMap
+            //vehicleOccupancyMap.put(selectedVehicle, vehicleOccupancyMap.get(selectedVehicle) - 1);
+
         } else {
             // Handle the case when there is no available vehicle: This might involve setting a default value or handling it in the fitness function
             individual[i] = VALUE_FOR_NO_VEHICLE_AVAILABLE;
@@ -507,7 +503,7 @@ public class GeneticAlgorithm {
                     UAMVehicle vehicle = feedDataForVehicleCreation(trip, false);
                     vehicleList.add(vehicle);
                     tripVehicleMap.put(trip.getTripId(), vehicleList);
-                    vehicleOccupancyMap.put(vehicle, VEHICLE_CAPACITY);
+                    //vehicleOccupancyMap.put(vehicle, VEHICLE_CAPACITY);
                 }
             }
         }
@@ -752,7 +748,7 @@ public class GeneticAlgorithm {
         //vehicles.put(vehicle.getId(), vehicle);
         vehicleOriginStationMap.put(vehicle.getId(), nearestOriginStation);
         vehicleDestinationStationMap.put(vehicle.getId(), nearestDestinationStation);
-        vehicleOccupancyMap.put(vehicle, VEHICLE_CAPACITY);
+        //vehicleOccupancyMap.put(vehicle, VEHICLE_CAPACITY);
 
         if (isAddingVehicleBeforeInitialization){
             // Get the station ID
