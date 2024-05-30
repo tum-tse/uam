@@ -21,6 +21,7 @@ import org.matsim.contrib.dvrp.fleet.ImmutableDvrpVehicleSpecification;
 import org.matsim.api.core.v01.Id;
 
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.Callable;
 
 public class GeneticAlgorithm {
     private static final Logger log = Logger.getLogger(GeneticAlgorithm.class);
@@ -87,19 +88,21 @@ public class GeneticAlgorithm {
     private static final Map<String, String> finalSolutionAssignedAccessStation = new HashMap<>(); // Additional field to store assigned access station of each trip for the final best feasible solution
     private static final Map<String, String> finalSolutionAssignedEgressStation = new HashMap<>(); // Additional field to store assigned egress station of each trip for the final best feasible solution
 
+    private static final int numProcessors = Runtime.getRuntime().availableProcessors();
+
     // Main method to run the GA =======================================================================================
     public static void main(String[] args) throws IOException, InterruptedException {
         // Load data
         DataLoader dataLoader = new DataLoader();
         dataLoader.loadAllData();
 
-        subTrips = extractSubTrips(dataLoader.getUamTrips());
+        //subTrips = extractSubTrips(dataLoader.getUamTrips());
                 String filePath = "/home/tumtse/Documents/haowu/uam/uam/scenarios/1-percent/sao_paulo_population2trips.csv";
-/*        subTrips = readTripsFromCsv(filePath);
+        subTrips = readTripsFromCsv(filePath);
         //Randomly select 10% trips from the list of subTrips
         subTrips = subTrips.stream()
                 .filter(trip -> rand.nextDouble() < 0.1)
-                .collect(Collectors.toCollection(ArrayList::new));*/
+                .collect(Collectors.toCollection(ArrayList::new));
 
         //vehicles = dataLoader.getVehicles();
         stations = dataLoader.getStations();
@@ -126,7 +129,6 @@ public class GeneticAlgorithm {
 
         // Repair infeasible solutions using Simulated Annealing
         // Executor service and queue for parallel processing
-        final int numProcessors = Runtime.getRuntime().availableProcessors();
         ExecutorService executorService = Executors.newFixedThreadPool(numProcessors);
         ArrayBlockingQueue<SolutionFitnessPair> queue = new ArrayBlockingQueue<>(solutionsHeap.size());
         repairInfeasibleSolutions(numProcessors, executorService, queue);
@@ -526,23 +528,68 @@ public class GeneticAlgorithm {
         }
     }
     // New method to update the solutions heap without side effects
-    private static PriorityQueue<SolutionFitnessPair> updateSolutionsHeap(int[][] population) {
+    private static PriorityQueue<SolutionFitnessPair> updateSolutionsHeap(int[][] population) throws InterruptedException {
         PriorityQueue<SolutionFitnessPair> iterationHeap = new PriorityQueue<>(Comparator.comparingDouble(SolutionFitnessPair::getFitness).reversed());
 
+        // Set up ExecutorService and ThreadCounter
+        ExecutorService executorService = Executors.newFixedThreadPool(numProcessors);
+        ThreadCounter threadCounter = new ThreadCounter();
+
+        // Create a list to hold Future objects
+        List<Future<SolutionFitnessPair>> futures = new ArrayList<>();
+
         for (int[] individual : population) {
-            double fitness = calculateFitness(individual, false);
-            if (solutionsHeap.size() == POP_SIZE) {
-                // Only consider adding if the new solution is better than the worst in the heap
-                if (fitness > solutionsHeap.peek().getFitness()) {
-                    solutionsHeap.poll(); // Remove the solution with the lowest fitness
-                    solutionsHeap.add(new SolutionFitnessPair(individual, fitness)); // Add the new better solution
-                }
-            } else {
-                solutionsHeap.add(new SolutionFitnessPair(individual, fitness));
-            }
-            iterationHeap.add(new SolutionFitnessPair(individual, fitness));
+            while (threadCounter.getProcesses() >= numProcessors - 1)
+                Thread.sleep(200);
+
+            // Submit FitnessCalculator tasks
+            futures.add(executorService.submit(new FitnessCalculator(individual, threadCounter)));
         }
+
+        // Collect results
+        for (Future<SolutionFitnessPair> future : futures) {
+            try {
+                SolutionFitnessPair solutionPair = future.get();
+                if (solutionsHeap.size() == POP_SIZE) {
+                    if (solutionPair.getFitness() > solutionsHeap.peek().getFitness()) {
+                        solutionsHeap.poll();
+                        solutionsHeap.add(solutionPair);
+                    }
+                } else {
+                    solutionsHeap.add(solutionPair);
+                }
+                iterationHeap.add(solutionPair);
+            } catch (ExecutionException e) {
+                e.printStackTrace();
+            }
+        }
+
+        // Shutdown ExecutorService and wait for all tasks to finish
+        executorService.shutdown();
+        while (!executorService.isTerminated())
+            Thread.sleep(200);
+
         return iterationHeap;
+    }
+    static class FitnessCalculator implements Callable<SolutionFitnessPair> {
+        private final int[] individual;
+        private final ThreadCounter threadCounter;
+
+        public FitnessCalculator(int[] individual, ThreadCounter threadCounter) {
+            this.individual = individual;
+            this.threadCounter = threadCounter;
+        }
+
+        @Override
+        public SolutionFitnessPair call() {
+            threadCounter.register();
+            try {
+                double fitness = GeneticAlgorithm.calculateFitness(individual, false);
+                return new SolutionFitnessPair(individual, fitness);
+            } finally {
+                threadCounter.deregister();
+            }
+        }
     }
     // Method to find the first feasible solution from the priority queue without altering the original heap
     private static SolutionFitnessPair findBestFeasibleSolution() {
