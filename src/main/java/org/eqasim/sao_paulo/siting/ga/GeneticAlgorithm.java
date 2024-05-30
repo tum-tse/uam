@@ -77,7 +77,7 @@ public class GeneticAlgorithm {
     //private static final Map<UAMVehicle, Integer> vehicleOccupancyMap = new HashMap<>();
 
     // Data container for outputs
-    private static final PriorityQueue<SolutionFitnessPair> solutionsHeap = new PriorityQueue<>(Comparator.comparingDouble(SolutionFitnessPair::getFitness));
+    private static PriorityQueue<SolutionFitnessPair> solutionsHeap = new PriorityQueue<>(Comparator.comparingDouble(SolutionFitnessPair::getFitness));
     private static final PriorityQueue<SolutionFitnessPair> repairedSolutionsHeap = new PriorityQueue<>(Comparator.comparingDouble(SolutionFitnessPair::getFitness));
     private static final Map<String, Double> finalSolutionTravelTimeChanges = new HashMap<>(); // Additional field to store travel time change of each trip for the final best feasible solution
     private static final Map<String, Double> finalSolutionFlightDistanceChanges = new HashMap<>(); // Additional field to store saved flight distance of each trip for the final best feasible solution
@@ -119,13 +119,13 @@ public class GeneticAlgorithm {
                 double fitness = calculateFitness(individual, false);
                 solutionsHeap.add(new SolutionFitnessPair(individual, fitness));
             }
-            System.out.println("Generation " + "0" + ": Best fitness = " + findBestFitness(population));
+            System.out.println("Generation " + "0" + ": Best fitness = " + solutionsHeap.peek().getFitness());
         }
 
         // GA iterations
         for (int gen = 1; gen < MAX_GENERATIONS; gen++) {
             population = evolvePopulation(population, gen);
-            updateSolutionsHeap(population);
+            solutionsHeap = updateSolutionsHeap(population, solutionsHeap);
             System.out.println("Generation " + gen + ": Best fitness = " + findBestFitness(population));
         }
 
@@ -530,20 +530,21 @@ public class GeneticAlgorithm {
             return fitness;
         }
     }
-    // New method to update the solutions heap
-    private static void updateSolutionsHeap(int[][] population) {
+    // New method to update the solutions heap without side effects
+    private static PriorityQueue<SolutionFitnessPair> updateSolutionsHeap(int[][] population, PriorityQueue<SolutionFitnessPair> localSolutionsHeap) {
+        PriorityQueue<SolutionFitnessPair> newSolutionsHeap = new PriorityQueue<>(localSolutionsHeap);
+
         for (int[] individual : population) {
             double fitness = calculateFitness(individual, false);
             // Only consider adding if the new solution is better than the worst in the heap
-            if (fitness > solutionsHeap.peek().getFitness()) {
-                if (solutionsHeap.size() == POP_SIZE) {
-                    solutionsHeap.poll(); // Remove the solution with the lowest fitness
-                    solutionsHeap.add(new SolutionFitnessPair(individual, fitness)); // Add the new better solution
-                } else {
-                    throw new IllegalArgumentException("Need to handle the case when the heap size exceeds the population size.");
+            if (fitness > newSolutionsHeap.peek().getFitness()) {
+                if (newSolutionsHeap.size() == POP_SIZE) {
+                    newSolutionsHeap.poll(); // Remove the solution with the lowest fitness
+                    newSolutionsHeap.add(new SolutionFitnessPair(individual, fitness)); // Add the new better solution
                 }
             }
         }
+        return newSolutionsHeap;
     }
     // Method to find the first feasible solution from the priority queue without altering the original heap
     private static SolutionFitnessPair findBestFeasibleSolution() {
