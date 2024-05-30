@@ -115,19 +115,11 @@ public class GeneticAlgorithm {
         // Initialize population and solutions heap in the first generation
         int[][] population = initializePopulation();
 
-        if (solutionsHeap.isEmpty()) {
-            PriorityQueue<SolutionFitnessPair> firstIterationHeap = new PriorityQueue<>(Comparator.comparingDouble(SolutionFitnessPair::getFitness).reversed());
-            for (int[] individual : population) {
-                double fitness = calculateFitness(individual, false);
-                solutionsHeap.add(new SolutionFitnessPair(individual, fitness));
-                firstIterationHeap.add(new SolutionFitnessPair(individual, fitness));
-            }
-            System.out.println("Generation " + "0" + ": Best fitness = " + firstIterationHeap.peek().getFitness());
-        }
-
         // GA iterations
-        for (int gen = 1; gen < MAX_GENERATIONS; gen++) {
-            population = evolvePopulation(population, gen);
+        for (int gen = 0; gen < MAX_GENERATIONS; gen++) {
+            if(gen > 0){
+                population = evolvePopulation(population, gen);
+            }
             PriorityQueue<SolutionFitnessPair> iterationHeap = updateSolutionsHeap(population);
             System.out.println("Generation " + gen + ": Best fitness = " + iterationHeap.peek().getFitness());
         }
@@ -537,16 +529,24 @@ public class GeneticAlgorithm {
     private static PriorityQueue<SolutionFitnessPair> updateSolutionsHeap(int[][] population) {
         PriorityQueue<SolutionFitnessPair> iterationHeap = new PriorityQueue<>(Comparator.comparingDouble(SolutionFitnessPair::getFitness).reversed());
 
-        for (int[] individual : population) {
-            double fitness = calculateFitness(individual, false);
-            // Only consider adding if the new solution is better than the worst in the heap
-            if (fitness > solutionsHeap.peek().getFitness()) {
-                if (solutionsHeap.size() == POP_SIZE) {
-                    solutionsHeap.poll(); // Remove the solution with the lowest fitness
-                    solutionsHeap.add(new SolutionFitnessPair(individual, fitness)); // Add the new better solution
-                }
+        if (solutionsHeap.isEmpty()) {
+            for (int[] individual : population) {
+                double fitness = calculateFitness(individual, false);
+                solutionsHeap.add(new SolutionFitnessPair(individual, fitness));
+                iterationHeap.add(new SolutionFitnessPair(individual, fitness));
             }
-            iterationHeap.add(new SolutionFitnessPair(individual, fitness));
+        } else {
+            for (int[] individual : population) {
+                double fitness = calculateFitness(individual, false);
+                // Only consider adding if the new solution is better than the worst in the heap
+                if (fitness > solutionsHeap.peek().getFitness()) {
+                    if (solutionsHeap.size() == POP_SIZE) {
+                        solutionsHeap.poll(); // Remove the solution with the lowest fitness
+                        solutionsHeap.add(new SolutionFitnessPair(individual, fitness)); // Add the new better solution
+                    }
+                }
+                iterationHeap.add(new SolutionFitnessPair(individual, fitness));
+            }
         }
         return iterationHeap;
     }
