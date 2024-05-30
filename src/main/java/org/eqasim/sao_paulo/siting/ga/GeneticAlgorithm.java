@@ -529,24 +529,18 @@ public class GeneticAlgorithm {
     private static PriorityQueue<SolutionFitnessPair> updateSolutionsHeap(int[][] population) {
         PriorityQueue<SolutionFitnessPair> iterationHeap = new PriorityQueue<>(Comparator.comparingDouble(SolutionFitnessPair::getFitness).reversed());
 
-        if (solutionsHeap.isEmpty()) {
-            for (int[] individual : population) {
-                double fitness = calculateFitness(individual, false);
-                solutionsHeap.add(new SolutionFitnessPair(individual, fitness));
-                iterationHeap.add(new SolutionFitnessPair(individual, fitness));
-            }
-        } else {
-            for (int[] individual : population) {
-                double fitness = calculateFitness(individual, false);
+        for (int[] individual : population) {
+            double fitness = calculateFitness(individual, false);
+            if (solutionsHeap.size() == POP_SIZE) {
                 // Only consider adding if the new solution is better than the worst in the heap
                 if (fitness > solutionsHeap.peek().getFitness()) {
-                    if (solutionsHeap.size() == POP_SIZE) {
-                        solutionsHeap.poll(); // Remove the solution with the lowest fitness
-                        solutionsHeap.add(new SolutionFitnessPair(individual, fitness)); // Add the new better solution
-                    }
+                    solutionsHeap.poll(); // Remove the solution with the lowest fitness
+                    solutionsHeap.add(new SolutionFitnessPair(individual, fitness)); // Add the new better solution
                 }
-                iterationHeap.add(new SolutionFitnessPair(individual, fitness));
+            } else {
+                solutionsHeap.add(new SolutionFitnessPair(individual, fitness));
             }
+            iterationHeap.add(new SolutionFitnessPair(individual, fitness));
         }
         return iterationHeap;
     }
