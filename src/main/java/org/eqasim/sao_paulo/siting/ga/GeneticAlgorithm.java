@@ -68,11 +68,11 @@ public class GeneticAlgorithm {
     // Data container for the UAM problem ==============================================================================
     private static List<UAMTrip> subTrips = null;
     private static Map<Id<UAMStation>, UAMStation> stations = null;
-    //private static final Map<Id<DvrpVehicle>, UAMVehicle> vehicles = new HashMap<>();
     private static final Map<Id<UAMStation>, List<UAMVehicle>> originStationVehicleMap = new HashMap<>();
     private static final Map<Id<DvrpVehicle>, UAMStation> vehicleOriginStationMap = new HashMap<>();
     private static final Map<Id<DvrpVehicle>, UAMStation> vehicleDestinationStationMap = new HashMap<>();
     private static Map<String, Map<UAMVehicle, Integer>> tripVehicleMap = null;
+    private static final Map<UAMVehicle, Integer> vehicleOccupancyMap = new HashMap<>();
 
     // Data container for outputs
     private static final PriorityQueue<SolutionFitnessPair> solutionsHeap = new PriorityQueue<>(Comparator.comparingDouble(SolutionFitnessPair::getFitness));
@@ -92,8 +92,8 @@ public class GeneticAlgorithm {
         dataLoader.loadAllData();
 
         subTrips = extractSubTrips(dataLoader.getUamTrips());
-        /*        String filePath = "/home/tumtse/Documents/haowu/uam/uam/scenarios/1-percent/sao_paulo_population2trips.csv";
-        subTrips = readTripsFromCsv(filePath);
+                String filePath = "/home/tumtse/Documents/haowu/uam/uam/scenarios/1-percent/sao_paulo_population2trips.csv";
+/*        subTrips = readTripsFromCsv(filePath);
         //Randomly select 10% trips from the list of subTrips
         subTrips = subTrips.stream()
                 .filter(trip -> rand.nextDouble() < 0.1)
@@ -163,10 +163,11 @@ public class GeneticAlgorithm {
     // Generate a random individual
     private static int[] generateIndividual() {
         int[] individual = new int[subTrips.size()];
+        //resetVehicleCapacities(tripVehicleMap); // Reset the vehicle capacity since capacity of vehicles will be updated during each individual generation
+        resetVehicleOccupancy(vehicleOccupancyMap);
         for (int i = 0; i < individual.length; i++) {
             assignAvailableVehicle(i, individual);
         }
-        resetVehicleCapacities(tripVehicleMap); // Reset the vehicle capacity since capacity of vehicles will be updated during each individual generation
         return individual;
     }
 
@@ -234,12 +235,13 @@ public class GeneticAlgorithm {
     }
     // Mutation - Randomly change vehicle assignment
     private static int[] mutate(int[] individual) {
+        //resetVehicleCapacities(tripVehicleMap); // Reset the vehicle capacity since capacity of vehicles will be updated during each individual generation
+        resetVehicleOccupancy(vehicleOccupancyMap);
         for (int i = 0; i < individual.length; i++) {
             if (rand.nextDouble() < MUTATION_RATE) {
                 assignAvailableVehicle(i, individual);
             }
         }
-        resetVehicleCapacities(tripVehicleMap); // Reset the vehicle capacity since capacity of vehicles will be updated during each individual generation
         return individual;
     }
 
@@ -250,6 +252,7 @@ public class GeneticAlgorithm {
         if (vehicleCapacityMap == null) {
             throw new IllegalArgumentException("No available vehicle for the trip, Please increase the search radius.");
         }
+        //TODO: Bug left in the following line
         List<UAMVehicle> vehicleList = vehicleCapacityMap.entrySet().stream()
                 .filter(entry -> entry.getValue() > 0)
                 .map(Map.Entry::getKey)
@@ -271,6 +274,7 @@ public class GeneticAlgorithm {
                 UAMVehicle vehicle = feedDataForVehicleCreation(trip, false);
                 vehicleCapacityMap.put(vehicle, VEHICLE_CAPACITY);
                 tripVehicleMap.put(trip.getTripId(), vehicleCapacityMap);
+                vehicleOccupancyMap.put(vehicle, VEHICLE_CAPACITY);
                 vehicleList.add(vehicle);
             }
 
@@ -284,6 +288,8 @@ public class GeneticAlgorithm {
                 // Decrement capacity and explicitly update tripVehicleMap
                 vehicleCapacityMap.put(selectedVehicle, currentCapacity - 1);
                 tripVehicleMap.put(trip.getTripId(), vehicleCapacityMap);
+
+                vehicleOccupancyMap.put(selectedVehicle, vehicleOccupancyMap.get(selectedVehicle) - 1);
             } else {
                 if (currentCapacity < 0){
                     throw new IllegalArgumentException("Capacity of the selected vehicle is smaller than 1.");
@@ -475,6 +481,11 @@ public class GeneticAlgorithm {
             });
         }
     }
+    private static void resetVehicleOccupancy(Map<UAMVehicle, Integer> vehicleOccupancyMap) {
+        for (Map.Entry<UAMVehicle, Integer> entry : vehicleOccupancyMap.entrySet()) {
+            entry.setValue(VEHICLE_CAPACITY);
+        }
+    }
     private static Map<String, Map<UAMVehicle, Integer>> findNearbyVehiclesToTrips(List<UAMTrip> subTrips) {
         Map<String, Map<UAMVehicle, Integer>> tripVehicleMap = new HashMap<>();
         for (UAMTrip trip : subTrips) {
@@ -501,6 +512,8 @@ public class GeneticAlgorithm {
                     UAMVehicle vehicle = feedDataForVehicleCreation(trip, false);
                     vehicleCapacityMap.put(vehicle, VEHICLE_CAPACITY);
                     tripVehicleMap.put(trip.getTripId(), vehicleCapacityMap);
+
+                    vehicleOccupancyMap.put(vehicle, VEHICLE_CAPACITY);
                 }
             }
         }
@@ -745,6 +758,7 @@ public class GeneticAlgorithm {
         //vehicles.put(vehicle.getId(), vehicle);
         vehicleOriginStationMap.put(vehicle.getId(), nearestOriginStation);
         vehicleDestinationStationMap.put(vehicle.getId(), nearestDestinationStation);
+        vehicleOccupancyMap.put(vehicle, VEHICLE_CAPACITY);
 
         if (isAddingVehicleBeforeInitialization){
             // Get the station ID
@@ -896,7 +910,6 @@ public class GeneticAlgorithm {
                 // Randomly change vehicle assignment to repair the solution
                 int tripIndex = rand.nextInt(newSolution.length);
                 assignAvailableVehicle(tripIndex, newSolution);
-                resetVehicleCapacities(tripVehicleMap); // Reset vehicle capacities
 
                 double currentFitness = calculateFitness(currentSolution, false);
                 double newFitness = calculateFitness(newSolution, false);
