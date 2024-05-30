@@ -539,7 +539,7 @@ public class GeneticAlgorithm {
         List<Future<SolutionFitnessPair>> futures = new ArrayList<>();
 
         for (int[] individual : population) {
-            while (threadCounter.getProcesses() >= numProcessors - 1)
+            while (threadCounter.getProcesses() >= numProcessors - 1) //TODO: could be adjusted to a larger number when number of trips is small!
                 Thread.sleep(200);
 
             // Submit FitnessCalculator tasks
