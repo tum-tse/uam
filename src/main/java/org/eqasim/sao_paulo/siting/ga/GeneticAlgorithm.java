@@ -71,7 +71,7 @@ public class GeneticAlgorithm {
     private static final Map<Id<UAMStation>, List<UAMVehicle>> originStationVehicleMap = new HashMap<>();
     private static final Map<Id<DvrpVehicle>, UAMStation> vehicleOriginStationMap = new HashMap<>();
     private static final Map<Id<DvrpVehicle>, UAMStation> vehicleDestinationStationMap = new HashMap<>();
-    private static Map<String, Map<UAMVehicle, Integer>> tripVehicleMap = null;
+    private static Map<String, List<UAMVehicle>> tripVehicleMap = null;
     private static final Map<UAMVehicle, Integer> vehicleOccupancyMap = new HashMap<>();
 
     // Data container for outputs
@@ -247,48 +247,52 @@ public class GeneticAlgorithm {
 
     private static void assignAvailableVehicle(int i, int[] individual) {
         UAMTrip trip = subTrips.get(i);
-        Map<UAMVehicle, Integer> vehicleCapacityMap = tripVehicleMap.get(trip.getTripId());
+        List<UAMVehicle> vehicleList = tripVehicleMap.get(trip.getTripId());
         //handle the case when there is no available vehicle
-        if (vehicleCapacityMap == null) {
+        if (vehicleList == null) {
             throw new IllegalArgumentException("No available vehicle for the trip, Please increase the search radius.");
         }
-        //TODO: Bug left in the following line
-        List<UAMVehicle> vehicleList = vehicleCapacityMap.entrySet().stream()
-                .filter(entry -> entry.getValue() > 0)
-                .map(Map.Entry::getKey)
-                .collect(Collectors.toCollection(ArrayList::new));
 
+        //add egress constraint
+        Iterator<UAMVehicle> iterator = vehicleList.iterator();
+        while (iterator.hasNext()) {
+            UAMVehicle vehicle = iterator.next();
+            UAMStation destinationStation = vehicleDestinationStationMap.get(vehicle.getId());
+            if (trip.calculateEgressTeleportationDistance(destinationStation) > SEARCH_RADIUS_DESTINATION) {
+                iterator.remove();
+            }
+        }
+
+        //add occupancy constraint
         if (!vehicleList.isEmpty()) {
-            //add egress constraint
-            Iterator<UAMVehicle> iterator = vehicleList.iterator();
-            while (iterator.hasNext()) {
-                UAMVehicle vehicle = iterator.next();
-                UAMStation destinationStation = vehicleDestinationStationMap.get(vehicle.getId());
-                if (trip.calculateEgressTeleportationDistance(destinationStation) > SEARCH_RADIUS_DESTINATION) {
-                    iterator.remove();
+            Iterator<UAMVehicle> iterator0 = vehicleList.iterator();
+            while (iterator0.hasNext()) {
+                UAMVehicle vehicle = iterator0.next();
+                int occupancy = vehicleOccupancyMap.get(vehicle);
+                if (occupancy <= 0) {
+                    iterator0.remove();
                 }
             }
+        }
 
-            // ----- add a new vehicle for the trip when there is no available vehicle (i.e., vehicle still has capacity) after checking the egress constraint
-            if (vehicleList.isEmpty()) {
-                UAMVehicle vehicle = feedDataForVehicleCreation(trip, false);
-                vehicleCapacityMap.put(vehicle, VEHICLE_CAPACITY);
-                tripVehicleMap.put(trip.getTripId(), vehicleCapacityMap);
-                vehicleOccupancyMap.put(vehicle, VEHICLE_CAPACITY);
-                vehicleList.add(vehicle);
-            }
+        // ----- add a new vehicle for the trip when there is no available vehicle (i.e., vehicle still has capacity) after checking the egress constraint
+        if (vehicleList.isEmpty()) {
+            UAMVehicle vehicle = feedDataForVehicleCreation(trip, false);
+            vehicleList.add(vehicle);
+            tripVehicleMap.put(trip.getTripId(), vehicleList);
+            vehicleOccupancyMap.put(vehicle, VEHICLE_CAPACITY);
+        }
+
+        if (!vehicleList.isEmpty()) {
 
             //add access constraint
             int vehicleIndex = rand.nextInt(vehicleList.size());
             UAMVehicle selectedVehicle = vehicleList.get(vehicleIndex);
-            Integer currentCapacity = vehicleCapacityMap.get(selectedVehicle);
+            Integer currentCapacity = vehicleOccupancyMap.get(selectedVehicle);
             if (currentCapacity > 0) {
                 individual[i] = Integer.parseInt(selectedVehicle.getId().toString());
 
                 // Decrement capacity and explicitly update tripVehicleMap
-                vehicleCapacityMap.put(selectedVehicle, currentCapacity - 1);
-                tripVehicleMap.put(trip.getTripId(), vehicleCapacityMap);
-
                 vehicleOccupancyMap.put(selectedVehicle, vehicleOccupancyMap.get(selectedVehicle) - 1);
             } else {
                 if (currentCapacity < 0){
@@ -474,20 +478,13 @@ public class GeneticAlgorithm {
     }
 
     // Helper methods for GA ===========================================================================================
-    private static void resetVehicleCapacities(Map<String, Map<UAMVehicle, Integer>> tripVehicleMap) {
-        for (Map<UAMVehicle, Integer> vehicleMap : tripVehicleMap.values()) {
-            vehicleMap.forEach((vehicle, capacity) -> {
-                vehicleMap.put(vehicle, VEHICLE_CAPACITY); // Reset capacity to 4
-            });
-        }
-    }
     private static void resetVehicleOccupancy(Map<UAMVehicle, Integer> vehicleOccupancyMap) {
         for (Map.Entry<UAMVehicle, Integer> entry : vehicleOccupancyMap.entrySet()) {
             entry.setValue(VEHICLE_CAPACITY);
         }
     }
-    private static Map<String, Map<UAMVehicle, Integer>> findNearbyVehiclesToTrips(List<UAMTrip> subTrips) {
-        Map<String, Map<UAMVehicle, Integer>> tripVehicleMap = new HashMap<>();
+    private static Map<String, List<UAMVehicle>> findNearbyVehiclesToTrips(List<UAMTrip> subTrips) {
+        Map<String, List<UAMVehicle>> tripVehicleMap = new HashMap<>();
         for (UAMTrip trip : subTrips) {
             for (UAMStation station : stations.values()) {
                 if (trip.calculateAccessTeleportationDistance(station) <= SEARCH_RADIUS_ORIGIN) {
@@ -495,11 +492,9 @@ public class GeneticAlgorithm {
                     if (vehicles == null){
                         continue;
                     }
-                    Map<UAMVehicle, Integer> existingVehicles = tripVehicleMap.getOrDefault(trip.getTripId(), new HashMap<>());
+                    List<UAMVehicle> existingVehicles = tripVehicleMap.getOrDefault(trip.getTripId(), new ArrayList<>());
 
-                    for (UAMVehicle vehicle : vehicles) {
-                        existingVehicles.put(vehicle, VEHICLE_CAPACITY);
-                    }
+                    existingVehicles.addAll(vehicles);
 
                     tripVehicleMap.put(trip.getTripId(), existingVehicles);
                 } else {
@@ -508,11 +503,10 @@ public class GeneticAlgorithm {
                     }
 
                     // ----- Add a new vehicle for the trip when the access teleportation distance is longer than the search radius
-                    Map<UAMVehicle, Integer> vehicleCapacityMap = tripVehicleMap.getOrDefault(trip.getTripId(), new HashMap<>());
+                    List<UAMVehicle> vehicleList = tripVehicleMap.getOrDefault(trip.getTripId(), new ArrayList<>());
                     UAMVehicle vehicle = feedDataForVehicleCreation(trip, false);
-                    vehicleCapacityMap.put(vehicle, VEHICLE_CAPACITY);
-                    tripVehicleMap.put(trip.getTripId(), vehicleCapacityMap);
-
+                    vehicleList.add(vehicle);
+                    tripVehicleMap.put(trip.getTripId(), vehicleList);
                     vehicleOccupancyMap.put(vehicle, VEHICLE_CAPACITY);
                 }
             }
@@ -863,9 +857,11 @@ public class GeneticAlgorithm {
         //executorService.invokeAll(tasks);
         // Execute tasks and wait for completion
         ThreadCounter threadCounter = new ThreadCounter();
-        log.info("Simulated Annealing starts...");
         int counter = 0;
         int taskSize = queue.size();
+        if (!queue.isEmpty()){
+            log.info("Simulated Annealing starts...");
+        }
         log.info("Que size is: " + taskSize);
         while (!queue.isEmpty()) {
 
