@@ -101,8 +101,10 @@ public class GeneticAlgorithm {
         subTrips = readTripsFromCsv(filePath);
         //Randomly select 10% trips from the list of subTrips
         subTrips = subTrips.stream()
-                .filter(trip -> rand.nextDouble() < 0.1)
+                .filter(trip -> rand.nextDouble() < 0.01)
                 .collect(Collectors.toCollection(ArrayList::new));
+
+        log.info("The number of UAM trips: " + subTrips.size());
 
         //vehicles = dataLoader.getVehicles();
         stations = dataLoader.getStations();
@@ -248,15 +250,6 @@ public class GeneticAlgorithm {
     private static void assignAvailableVehicle(int i, int[] individual) {
         UAMTrip trip = subTrips.get(i);
         List<UAMVehicle> vehicleList = tripVehicleMap.get(trip.getTripId());
-        //handle the case when there is no available vehicle
-        if (vehicleList == null) {
-            throw new IllegalArgumentException("No available vehicle for the trip, Please increase the search radius.");
-        }
-
-        //add egress constraint
-        vehicleList = vehicleList.stream()
-                .filter(vehicle -> trip.calculateEgressTeleportationDistance(vehicleDestinationStationMap.get(vehicle.getId())) <= SEARCH_RADIUS_DESTINATION)
-                .collect(Collectors.toList());
 
         /*        //add occupancy constraint
         if (!vehicleList.isEmpty()) {
@@ -272,8 +265,11 @@ public class GeneticAlgorithm {
 
         //synchronize the block that checks for empty vehicle list and adds a new vehicle (i.e., vehicle has capacity) after checking the egress constraint
         synchronized (tripVehicleMap) {
-            // Add a new vehicle for the trip when there is no available vehicle
-            if (vehicleList.isEmpty()) {
+                // Add a new vehicle for the trip when there is no available vehicle
+            if (vehicleList==null||vehicleList.isEmpty()) {
+                if(vehicleList==null){
+                    vehicleList = new ArrayList<>();
+                }
                 UAMVehicle vehicle = feedDataForVehicleCreation(trip, false);
                 vehicleList.add(vehicle);
                 tripVehicleMap.put(trip.getTripId(), vehicleList);
@@ -488,10 +484,15 @@ public class GeneticAlgorithm {
                     }
                     List<UAMVehicle> existingVehicles = tripVehicleMap.getOrDefault(trip.getTripId(), new ArrayList<>());
 
+                    //add egress constraint
+                    vehicles = vehicles.stream()
+                            .filter(vehicle -> trip.calculateEgressTeleportationDistance(vehicleDestinationStationMap.get(vehicle.getId())) <= SEARCH_RADIUS_DESTINATION)
+                            .collect(Collectors.toCollection(ArrayList::new));
+
                     existingVehicles.addAll(vehicles);
 
                     tripVehicleMap.put(trip.getTripId(), existingVehicles);
-                } else {
+                } /*else {
                     if (trip.calculateAccessTeleportationDistance(station)> THRESHOLD_FOR_TRIPS_LONGER_THAN){
                         NUMBER_OF_TRIPS_LONGER_TAHN++;
                     }
@@ -502,7 +503,7 @@ public class GeneticAlgorithm {
                     vehicleList.add(vehicle);
                     tripVehicleMap.put(trip.getTripId(), vehicleList);
                     //vehicleOccupancyMap.put(vehicle, VEHICLE_CAPACITY);
-                }
+                }*/
             }
         }
         return tripVehicleMap;
@@ -603,14 +604,14 @@ public class GeneticAlgorithm {
         while (!solutionsHeapCopy.isEmpty()) {
             SolutionFitnessPair solutionPair = solutionsHeapCopy.poll(); // Remove and retrieve the solution with the highest fitness
             int[] candidateSolution = solutionPair.getSolution();
-            if (isFeasible(candidateSolution)) {
+            if (isFeasible(candidateSolution, false)) {
                 return solutionPair;
             }
         }
         throw new IllegalStateException("No feasible solution found in the entire population");
     }
     // Helper method to check if a solution violates vehicle capacity constraints
-    private static boolean isFeasible(int[] solution) {
+    private static boolean isFeasible(int[] solution, boolean isPrintCapacityViolation) {
         boolean isFeasible = true;
         int vehicleCapacityViolated = 0;
         Map<Integer, Integer> vehicleLoadCount = new HashMap<>();
@@ -623,7 +624,9 @@ public class GeneticAlgorithm {
                 vehicleCapacityViolated++;
             }
         }
-        //System.out.println("Number of vehicles with capacity violation: " + vehicleCapacityViolated);
+        if(isPrintCapacityViolation){
+            System.out.println("Number of vehicles with capacity violation: " + vehicleCapacityViolated);
+        }
         return isFeasible;
     }
 
@@ -879,7 +882,7 @@ public class GeneticAlgorithm {
 
         // Add all infeasible solutions to the queue
         for (SolutionFitnessPair solutionPair : solutionsHeap) {
-            if (!isFeasible(solutionPair.getSolution())) {
+            if (!isFeasible(solutionPair.getSolution(), true)) {
                 queue.add(solutionPair);
             } else {
                 repairedSolutionsHeap.add(solutionPair); //TODO: could also be "simulated annealed" for better performance
@@ -925,7 +928,7 @@ public class GeneticAlgorithm {
         public void run() {
             threadCounter.register();
 
-            double temperature = 1000.0;
+            double temperature = 100000.0;
             double coolingRate = 0.003;
 
             int[] currentSolution = Arrays.copyOf(solution, solution.length);
@@ -946,7 +949,7 @@ public class GeneticAlgorithm {
                     currentSolution = Arrays.copyOf(newSolution, newSolution.length);
                 }
 
-                if (newFitness > bestFitness && isFeasible(newSolution)) {
+                if (newFitness > bestFitness && isFeasible(newSolution, false)) {
                     bestSolution = Arrays.copyOf(newSolution, newSolution.length);
                     bestFitness = newFitness;
                 }
@@ -954,7 +957,7 @@ public class GeneticAlgorithm {
                 temperature *= 1 - coolingRate;
             }
 
-            if (isFeasible(bestSolution)) {
+            if (isFeasible(bestSolution, false)) {
                 repairedSolutionsHeap.add(new SolutionFitnessPair(bestSolution, bestFitness));
             }
 
@@ -985,6 +988,7 @@ public class GeneticAlgorithm {
     }
 
 }
+//TODO: only calculate the fitness if assignment for the trip is changed
 //TODO: To sort trips based on their origin station and destination station?
 //TODO: 3.	Heuristic-Based Mutation: Implement domain-specific mutations such as swapping vehicle assignments between closely located trips.
 //TODO: Need use the best solution starting from the crossover_disable_after iteration to generate new solutions for remaining iterations
