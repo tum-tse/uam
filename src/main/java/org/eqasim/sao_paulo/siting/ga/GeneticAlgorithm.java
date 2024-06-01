@@ -997,7 +997,7 @@ public class GeneticAlgorithm {
         }
     }
 
-    // google OR tools =================================================================================================
+    // google OR tools (version: 9.10.4067) =================================================================================================
     static {
         // Load the OR-Tools native library
         Loader.loadNativeLibraries();
