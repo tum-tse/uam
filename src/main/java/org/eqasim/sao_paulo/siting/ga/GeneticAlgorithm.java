@@ -1016,7 +1016,7 @@ public class GeneticAlgorithm {
         int counter = 0;
         int taskSize = queue.size();
         if (!queue.isEmpty()) {
-            log.info("Simulated Annealing starts...");
+            log.info("Constraint Programming (CP) starts...");
         }
         log.info("Queue size is: " + taskSize);
         while (!queue.isEmpty()) {
@@ -1090,7 +1090,7 @@ public class GeneticAlgorithm {
 
             boolean feasibleSolutionFound = false;
             while (solver.nextSolution()) {
-                boolean allConstraintsSatisfied = true;
+/*                boolean allConstraintsSatisfied = true;
                 for (int vehicleId : tripVehicleMap.values().stream().flatMap(List::stream).mapToInt(v -> Integer.parseInt(v.getId().toString())).distinct().toArray()) {
                     int vehicleUsage = 0;
                     for (int i = 0; i < numTrips; i++) {
@@ -1102,14 +1102,14 @@ public class GeneticAlgorithm {
                         allConstraintsSatisfied = false;
                         break;
                     }
-                }
-                if (allConstraintsSatisfied) {
+                }*/
+                //if (allConstraintsSatisfied) {
                     for (int i = 0; i < numTrips; i++) {
                         solution[i] = (int) vehicleAssignments[i].value();
                     }
                     feasibleSolutionFound = true;
                     break;
-                }
+                //}
             }
             solver.endSearch();
             return feasibleSolutionFound;
