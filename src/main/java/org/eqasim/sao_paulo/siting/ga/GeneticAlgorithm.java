@@ -1,5 +1,7 @@
 package org.eqasim.sao_paulo.siting.ga;
 
+import com.google.ortools.Loader;
+import com.google.ortools.constraintsolver.*;
 import net.bhl.matsim.uam.infrastructure.UAMStation;
 import org.eqasim.sao_paulo.siting.Utils.*;
 
@@ -29,7 +31,7 @@ public class GeneticAlgorithm {
     // Genetic Algorithm parameters ====================================================================================
     private static final int MAX_GENERATIONS = 100; // Max number of generations
     private static final int CROSSOVER_DISABLE_AFTER = 100; // New field to control when to stop crossover
-    private static final int POP_SIZE = 100; // Population size
+    private static final int POP_SIZE = 50; // Population size
     private static final double MUTATION_RATE = 0.05; // Mutation rate
     private static final double CROSSOVER_RATE = 0.7; // Crossover rate
     private static final int TOURNAMENT_SIZE = 5; // Tournament size for selection
@@ -72,8 +74,8 @@ public class GeneticAlgorithm {
     private static List<UAMTrip> subTrips = null;
     private static Map<Id<UAMStation>, UAMStation> stations = null;
     private static final Map<Id<UAMStation>, List<UAMVehicle>> originStationVehicleMap = new HashMap<>();
-    private static final Map<Id<DvrpVehicle>, UAMStation> vehicleOriginStationMap = new HashMap<>();
-    private static final Map<Id<DvrpVehicle>, UAMStation> vehicleDestinationStationMap = new HashMap<>();
+    private static final Map<Id<DvrpVehicle>, UAMStation> vehicleOriginStationMap = new ConcurrentHashMap<>();
+    private static final Map<Id<DvrpVehicle>, UAMStation> vehicleDestinationStationMap = new ConcurrentHashMap<>();
     private static Map<String, List<UAMVehicle>> tripVehicleMap = new ConcurrentHashMap<>(); // Update tripVehicleMap to use ConcurrentHashMap
     //private static final Map<UAMVehicle, Integer> vehicleOccupancyMap = new HashMap<>();
 
@@ -89,6 +91,7 @@ public class GeneticAlgorithm {
     private static final Map<String, String> finalSolutionAssignedEgressStation = new HashMap<>(); // Additional field to store assigned egress station of each trip for the final best feasible solution
 
     private static final int numProcessors = Runtime.getRuntime().availableProcessors();
+    private static final int bufferDivider = 1;
 
     // Main method to run the GA =======================================================================================
     public static void main(String[] args) throws IOException, InterruptedException {
@@ -782,6 +785,11 @@ public class GeneticAlgorithm {
     private static UAMVehicle feedDataForVehicleCreation(UAMTrip subTrip, boolean isAddingVehicleBeforeInitialization) {
         UAMStation nearestOriginStation = findNearestStation(subTrip, stations, true);
         UAMStation nearestDestinationStation = findNearestStation(subTrip, stations, false);
+
+        if (nearestOriginStation == null || nearestDestinationStation == null) {
+            log.error("Found null station for trip: " + subTrip.getTripId());
+        }
+
         UAMVehicle vehicle = createVehicle(nearestOriginStation);
 
         //vehicles.put(vehicle.getId(), vehicle);
@@ -828,17 +836,19 @@ public class GeneticAlgorithm {
     private static UAMStation findNearestStation(UAMTrip trip, Map<Id<UAMStation>, UAMStation> stations, boolean accessLeg) {
         UAMStation nearestStation = null;
         double shortestDistance = Double.MAX_VALUE;
-        for (UAMStation station: stations.values()){
-            double distance;
-            if (accessLeg){
-                distance = trip.calculateAccessTeleportationDistance(station);
-            } else {
-                distance = trip.calculateEgressTeleportationDistance(station);
+        for (UAMStation station : stations.values()) {
+            if (station == null) {
+                log.error("Encountered null station in stations map");
+                continue; // Skip null stations
             }
-            if (distance < shortestDistance){
+            double distance = accessLeg ? trip.calculateAccessTeleportationDistance(station) : trip.calculateEgressTeleportationDistance(station);
+            if (distance < shortestDistance) {
                 nearestStation = station;
                 shortestDistance = distance;
             }
+        }
+        if (nearestStation == null) {
+            log.warn("No nearest station found for trip: " + trip.getTripId());
         }
         return nearestStation;
     }
@@ -878,7 +888,7 @@ public class GeneticAlgorithm {
     }
 
     // Simulated Annealing to Repair Infeasible Solutions =============================================================
-    private static void repairInfeasibleSolutions(int numProcessors, ExecutorService executorService, ArrayBlockingQueue<SolutionFitnessPair> queue) throws InterruptedException {
+    private static void repairInfeasibleSolutionsSA(int numProcessors, ExecutorService executorService, ArrayBlockingQueue<SolutionFitnessPair> queue) throws InterruptedException {
 
         // Add all infeasible solutions to the queue
         for (SolutionFitnessPair solutionPair : solutionsHeap) {
@@ -984,6 +994,132 @@ public class GeneticAlgorithm {
 
         public synchronized int getProcesses() {
             return processes;
+        }
+    }
+
+    // google OR tools =================================================================================================
+    static {
+        // Load the OR-Tools native library
+        Loader.loadNativeLibraries();
+    }
+    private static void repairInfeasibleSolutions(int numProcessors, ExecutorService executorService, ArrayBlockingQueue<SolutionFitnessPair> queue) throws InterruptedException {
+        // Add all infeasible solutions to the queue
+        for (SolutionFitnessPair solutionPair : solutionsHeap) {
+            if (!isFeasible(solutionPair.getSolution(), true)) {
+                queue.add(solutionPair);
+            } else {
+                repairedSolutionsHeap.add(solutionPair); // TODO: could also be "simulated annealed" for better performance
+            }
+        }
+
+        ThreadCounter threadCounter = new ThreadCounter();
+        int counter = 0;
+        int taskSize = queue.size();
+        if (!queue.isEmpty()) {
+            log.info("Simulated Annealing starts...");
+        }
+        log.info("Queue size is: " + taskSize);
+        while (!queue.isEmpty()) {
+            while (threadCounter.getProcesses() >= numProcessors/bufferDivider - 1)
+                Thread.sleep(200);
+
+            SolutionFitnessPair solutionPair = queue.poll();
+            if (solutionPair != null) {
+                executorService.execute(new Runnable() {
+                    @Override
+                    public void run() {
+                        threadCounter.register();
+                        try {
+                            int[] solution = solutionPair.getSolution();
+                            if (fixInfeasibleSolutionWithORTools(solution)) {
+                                repairedSolutionsHeap.add(new SolutionFitnessPair(solution, calculateFitness(solution, false)));
+                            }
+                        } finally {
+                            threadCounter.deregister();
+                        }
+                    }
+                });
+            }
+
+            counter++;
+            log.info("Calculation completion: " + counter + "/" + taskSize + " (" + String.format("%.0f", (double) counter / taskSize * 100) + "%).");
+        }
+        executorService.shutdown();
+    }
+    private static boolean fixInfeasibleSolutionWithORTools(int[] solution) {
+        Solver solver = null;
+        try {
+            solver = new Solver("FixInfeasibleSolution");
+
+            int numTrips = solution.length;
+
+            // Variables: Vehicle assignment for each trip
+            IntVar[] vehicleAssignments = new IntVar[numTrips];
+            for (int i = 0; i < numTrips; i++) {
+                UAMTrip trip = subTrips.get(i);
+                List<UAMVehicle> availableVehicles = tripVehicleMap.get(trip.getTripId());
+                int[] availableVehicleIds = availableVehicles.stream().mapToInt(v -> Integer.parseInt(v.getId().toString())).toArray();
+
+                // Define the domain of the variable to be the available vehicles for this trip
+                vehicleAssignments[i] = solver.makeIntVar(availableVehicleIds, "vehicle_" + i);
+            }
+
+            // Constraints: Each vehicle cannot exceed its capacity
+            for (int vehicleId : tripVehicleMap.values().stream().flatMap(List::stream).mapToInt(v -> Integer.parseInt(v.getId().toString())).distinct().toArray()) {
+                IntVar vehicleCapacityUsage = solver.makeIntVar(0, VEHICLE_CAPACITY, "vehicleCapacityUsage_" + vehicleId);
+                IntVar[] vehicleLoad = new IntVar[numTrips];
+                for (int i = 0; i < numTrips; i++) {
+                    vehicleLoad[i] = solver.makeIsEqualCstVar(vehicleAssignments[i], vehicleId);
+                }
+                solver.addConstraint(solver.makeEquality(vehicleCapacityUsage, solver.makeSum(vehicleLoad)));
+                solver.addConstraint(solver.makeLessOrEqual(vehicleCapacityUsage, VEHICLE_CAPACITY));
+            }
+
+            // Objective: Minimize the number of changes in vehicle assignments
+            int[] initialAssignments = Arrays.copyOf(solution, solution.length);
+            IntVar[] assignmentChanges = new IntVar[numTrips];
+            for (int i = 0; i < numTrips; i++) {
+                assignmentChanges[i] = solver.makeIsDifferentCstVar(vehicleAssignments[i], initialAssignments[i]);
+            }
+            IntVar totalChanges = solver.makeSum(assignmentChanges).var();
+            OptimizeVar objective = solver.makeMinimize(totalChanges, 1);
+
+            // Solve the problem
+            DecisionBuilder db = solver.makePhase(vehicleAssignments, Solver.CHOOSE_FIRST_UNBOUND, Solver.ASSIGN_MIN_VALUE);
+            solver.newSearch(db, objective);
+
+            boolean feasibleSolutionFound = false;
+            while (solver.nextSolution()) {
+                boolean allConstraintsSatisfied = true;
+                for (int vehicleId : tripVehicleMap.values().stream().flatMap(List::stream).mapToInt(v -> Integer.parseInt(v.getId().toString())).distinct().toArray()) {
+                    int vehicleUsage = 0;
+                    for (int i = 0; i < numTrips; i++) {
+                        if (vehicleAssignments[i].value() == vehicleId) {
+                            vehicleUsage++;
+                        }
+                    }
+                    if (vehicleUsage > VEHICLE_CAPACITY) {
+                        allConstraintsSatisfied = false;
+                        break;
+                    }
+                }
+                if (allConstraintsSatisfied) {
+                    for (int i = 0; i < numTrips; i++) {
+                        solution[i] = (int) vehicleAssignments[i].value();
+                    }
+                    feasibleSolutionFound = true;
+                    break;
+                }
+            }
+            solver.endSearch();
+            return feasibleSolutionFound;
+        } finally {
+            if (solver != null) {
+                solver = null;  // Ensure the solver is closed properly
+            }
+            // Suggest the JVM to run garbage collection
+            System.gc();
+            System.runFinalization();
         }
     }
 
