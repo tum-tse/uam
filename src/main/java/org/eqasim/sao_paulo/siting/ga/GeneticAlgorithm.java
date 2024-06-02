@@ -35,8 +35,8 @@ public class GeneticAlgorithm {
     private static final double CROSSOVER_RATE = 0.7; // Crossover rate
     private static final int TOURNAMENT_SIZE = 5; // Tournament size for selection
 
-    private static final double ALPHA = - 10.0; // Weight for changed flight distances
-    private static final double BETA = - 0.1; // Weight for change in travel time
+    private static final double ALPHA = - 0.001; // Weight for changed flight distances
+    private static final double BETA = - 1; // Weight for change in travel time
     private static final double BETA_NONE_POOLED_TRIP_EARLIER_DEPARTURE = - 0.1; //TODO: need to reconsider the value
     private static final double PENALTY_FOR_VEHICLE_CAPACITY_VIOLATION = -10000;
 
@@ -53,8 +53,8 @@ public class GeneticAlgorithm {
     // Variables for the UAM problem ===================================================================================
     private static final int BUFFER_START_TIME = 3600*7; // Buffer start time for the first trip
     private static final int BUFFER_END_TIME = 3600*7+240; // Buffer end time for the last trip
-    private static final double SEARCH_RADIUS_ORIGIN = 4000; // search radius for origin station
-    private static final double SEARCH_RADIUS_DESTINATION = 4000; // search radius for destination station
+    private static final double SEARCH_RADIUS_ORIGIN = 2000; // search radius for origin station
+    private static final double SEARCH_RADIUS_DESTINATION = 2000; // search radius for destination station
 
     // Helpers for the UAM problem =====================================================================================
     private static final double THRESHOLD_FOR_TRIPS_LONGER_THAN = SEARCH_RADIUS_ORIGIN;
@@ -379,10 +379,10 @@ public class GeneticAlgorithm {
                 // calculate additional travel time
                 double originalArrivalTimeForThePooledTrip = trip.getDepartureTime() + trip.calculateAccessTeleportationTime(trip.getOriginStation());
                 double additionalTravelTimeDueToAccessMatching = boardingTimeForAllTrips - originalArrivalTimeForThePooledTrip;
-                if (additionalTravelTimeDueToAccessMatching < 0){
+/*                if (additionalTravelTimeDueToAccessMatching < 0){
                     additionalTravelTimeDueToAccessMatching = 0;
                     //TODO: reconsider for "negative additional travel time" cases
-                }
+                }*/
                 fitness += BETA * additionalTravelTimeDueToAccessMatching;
                 tripTimeChange += additionalTravelTimeDueToAccessMatching;
                 double additionalTravelTimeDueToEgressMatching = getTravelTimeChangeDueToEgressMatching(trip, destinationStationOfVehicle);
