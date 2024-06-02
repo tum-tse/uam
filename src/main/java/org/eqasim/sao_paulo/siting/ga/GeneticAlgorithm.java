@@ -100,7 +100,7 @@ public class GeneticAlgorithm {
         dataLoader.loadAllData();
 
         //subTrips = extractSubTrips(dataLoader.getUamTrips());
-                String filePath = "/home/tumtse/Documents/haowu/uam/uam/scenarios/1-percent/sao_paulo_population2trips.csv";
+        String filePath = "/home/tumtse/Documents/haowu/uam/uam/scenarios/1-percent/sao_paulo_population2trips.csv";
         subTrips = readTripsFromCsv(filePath);
         //Randomly select 10% trips from the list of subTrips
         subTrips = subTrips.stream()
@@ -113,7 +113,7 @@ public class GeneticAlgorithm {
         stations = dataLoader.getStations();
 
         // Initialize the origin station and destination station for each trip
-        for(UAMTrip uamTrip: subTrips){
+        for (UAMTrip uamTrip : subTrips) {
             uamTrip.setOriginStation(findNearestStation(uamTrip, stations, true));
             uamTrip.setDestinationStation(findNearestStation(uamTrip, stations, false));
         }
@@ -133,6 +133,7 @@ public class GeneticAlgorithm {
         System.out.println("Threshold for trips longer than " + THRESHOLD_FOR_TRIPS_LONGER_THAN_STRING + ": " + NUMBER_OF_TRIPS_LONGER_TAHN);
     }
 
+    // GA solver =======================================================================================================
     private static SolutionFitnessPair solveWithGA() throws InterruptedException {
         // Initialize population and solutions heap in the first generation
         int[][] population = initializePopulation();
@@ -160,7 +161,6 @@ public class GeneticAlgorithm {
         return bestFeasibleSolutionFitnessPair;
     }
 
-    // GA ==============================================================================================================
     // Initialize population with random assignments
     private static int[][] initializePopulation() {
         int[][] population = new int[GeneticAlgorithm.POP_SIZE][];
