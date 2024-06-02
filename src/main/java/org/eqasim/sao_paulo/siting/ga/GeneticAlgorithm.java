@@ -89,7 +89,7 @@ public class GeneticAlgorithm {
     private static final Map<String, String> finalSolutionAssignedAccessStation = new HashMap<>(); // Additional field to store assigned access station of each trip for the final best feasible solution
     private static final Map<String, String> finalSolutionAssignedEgressStation = new HashMap<>(); // Additional field to store assigned egress station of each trip for the final best feasible solution
 
-    //parallel computing
+    // Parallel computing
     private static final int numProcessors = Runtime.getRuntime().availableProcessors();
     private static final int bufferDivider = 1;
 
@@ -120,6 +120,20 @@ public class GeneticAlgorithm {
         saveStationVehicleNumber(subTrips);
         tripVehicleMap = findNearbyVehiclesToTrips(subTrips);
 
+        SolutionFitnessPair bestFeasibleSolutionFitnessPair = solveWithGA();
+        int[] bestFeasibleSolution = bestFeasibleSolutionFitnessPair.getSolution();
+        System.out.println("Best feasible solution: " + Arrays.toString(bestFeasibleSolution));
+        System.out.println("The fitness of the best feasible solution: " + bestFeasibleSolutionFitnessPair.getFitness());
+
+        // Calculate and print the performance indicators
+        calculateFitness(bestFeasibleSolution, true);
+        printPerformanceIndicators(bestFeasibleSolution, "src/main/java/org/eqasim/sao_paulo/siting/ga/trip_statistics.csv");
+
+        // Print the NUMBER_OF_TRIPS_LONGER_THAN
+        System.out.println("Threshold for trips longer than " + THRESHOLD_FOR_TRIPS_LONGER_THAN_STRING + ": " + NUMBER_OF_TRIPS_LONGER_TAHN);
+    }
+
+    private static SolutionFitnessPair solveWithGA() throws InterruptedException {
         // Initialize population and solutions heap in the first generation
         int[][] population = initializePopulation();
 
@@ -143,16 +157,7 @@ public class GeneticAlgorithm {
 
         // Find the best feasible solution at the end of GA execution without altering the original solutions heap
         SolutionFitnessPair bestFeasibleSolutionFitnessPair = findBestFeasibleSolution();
-        int[] bestFeasibleSolution = bestFeasibleSolutionFitnessPair.getSolution();
-        System.out.println("Best feasible solution: " + Arrays.toString(bestFeasibleSolution));
-        System.out.println("The fitness of the best feasible solution: " + bestFeasibleSolutionFitnessPair.getFitness());
-
-        // Calculate and print the performance indicators
-        calculateFitness(bestFeasibleSolution, true);
-        printPerformanceIndicators(bestFeasibleSolution, "src/main/java/org/eqasim/sao_paulo/siting/ga/trip_statistics.csv");
-
-        // Print the NUMBER_OF_TRIPS_LONGER_THAN
-        System.out.println("Threshold for trips longer than " + THRESHOLD_FOR_TRIPS_LONGER_THAN_STRING + ": " + NUMBER_OF_TRIPS_LONGER_TAHN);
+        return bestFeasibleSolutionFitnessPair;
     }
 
     // GA ==============================================================================================================
