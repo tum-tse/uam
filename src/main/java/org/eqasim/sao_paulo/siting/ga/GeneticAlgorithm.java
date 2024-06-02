@@ -90,6 +90,7 @@ public class GeneticAlgorithm {
     private static final Map<String, String> finalSolutionAssignedAccessStation = new HashMap<>(); // Additional field to store assigned access station of each trip for the final best feasible solution
     private static final Map<String, String> finalSolutionAssignedEgressStation = new HashMap<>(); // Additional field to store assigned egress station of each trip for the final best feasible solution
 
+    //parallel computing
     private static final int numProcessors = Runtime.getRuntime().availableProcessors();
     private static final int bufferDivider = 1;
 
@@ -759,6 +760,7 @@ public class GeneticAlgorithm {
                 .collect(Collectors.toCollection(ArrayList::new));
     }
 
+    // Method to create UAM vehicles and assign them to stations in the initialization phase (could also be used in later stage)
     private static void saveStationVehicleNumber(List<UAMTrip> subTrips) {
 
 /*        // Loop through the stations so that we can assign at least 1 to each station before we assign more vehicles based on the demand
@@ -853,7 +855,7 @@ public class GeneticAlgorithm {
         return nearestStation;
     }
 
-    // read demand =====================================================================================================
+    // read demand select randomly =====================================================================================
     public static List<UAMTrip> readTripsFromCsv(String filePath) {
         List<UAMTrip> trips = new ArrayList<>();
 
@@ -887,7 +889,7 @@ public class GeneticAlgorithm {
         return new UAMTrip(tripId, originX, originY, destX, destY, departureTime, flightDistance, origStation, destStation, purpose, income);
     }
 
-    // Simulated Annealing to Repair Infeasible Solutions =============================================================
+    // Simulated Annealing to Repair Infeasible Solutions ==============================================================
     private static void repairInfeasibleSolutionsSA(int numProcessors, ExecutorService executorService, ArrayBlockingQueue<SolutionFitnessPair> queue) throws InterruptedException {
 
         // Add all infeasible solutions to the queue
@@ -997,7 +999,7 @@ public class GeneticAlgorithm {
         }
     }
 
-    // google OR tools (version: 9.10.4067) =================================================================================================
+    // Google OR tools (version: 9.10.4067) ============================================================================
     static {
         // Load the OR-Tools native library
         Loader.loadNativeLibraries();
@@ -1084,6 +1086,10 @@ public class GeneticAlgorithm {
             IntVar totalChanges = solver.makeSum(assignmentChanges).var();
             OptimizeVar objective = solver.makeMinimize(totalChanges, 1);
 
+            // Set up the search parameters with number of workers (threads)
+            // There is no direct way to set number of threads in the CP solver in Java as in other APIs.
+            // But OR-Tools generally respects the system's thread settings, you can try using environment variables.
+
             // Solve the problem
             DecisionBuilder db = solver.makePhase(vehicleAssignments, Solver.CHOOSE_FIRST_UNBOUND, Solver.ASSIGN_MIN_VALUE);
             solver.newSearch(db, objective);
@@ -1124,6 +1130,7 @@ public class GeneticAlgorithm {
     }
 
 }
+
 //TODO: only calculate the fitness if assignment for the trip is changed
 //TODO: To sort trips based on their origin station and destination station?
 //TODO: 3.	Heuristic-Based Mutation: Implement domain-specific mutations such as swapping vehicle assignments between closely located trips.
