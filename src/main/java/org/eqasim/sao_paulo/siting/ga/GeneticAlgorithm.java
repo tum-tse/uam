@@ -102,7 +102,7 @@ public class GeneticAlgorithm {
         //subTrips = extractSubTrips(dataLoader.getUamTrips());
         String filePath = "/home/tumtse/Documents/haowu/uam/uam/scenarios/1-percent/sao_paulo_population2trips.csv";
         subTrips = readTripsFromCsv(filePath);
-        //Randomly select 10% trips from the list of subTrips
+        // Randomly select 10% trips from the list of subTrips
         subTrips = subTrips.stream()
                 .filter(trip -> rand.nextDouble() < 0.01)
                 .collect(Collectors.toCollection(ArrayList::new));
@@ -330,6 +330,11 @@ public class GeneticAlgorithm {
             System.out.println("Pooling rate: " + poolingRate);
         }
 
+        fitness = getFitnessPerVehicle(isFinalBestFeasibleSolution, vehicleAssignments, fitness);
+
+        return fitness;
+    }
+    private static double getFitnessPerVehicle(boolean isFinalBestFeasibleSolution, Map<Integer, List<UAMTrip>> vehicleAssignments, double fitness) {
         // Calculate fitness per vehicle
         for (Map.Entry<Integer, List<UAMTrip>> entry : vehicleAssignments.entrySet()) {
             List<UAMTrip> trips = entry.getValue();
@@ -384,10 +389,9 @@ public class GeneticAlgorithm {
                 // calculate additional travel time
                 double originalArrivalTimeForThePooledTrip = trip.getDepartureTime() + trip.calculateAccessTeleportationTime(trip.getOriginStation());
                 double additionalTravelTimeDueToAccessMatching = boardingTimeForAllTrips - originalArrivalTimeForThePooledTrip;
-/*                if (additionalTravelTimeDueToAccessMatching < 0){
-                    additionalTravelTimeDueToAccessMatching = 0;
-                    //TODO: reconsider for "negative additional travel time" cases
-                }*/
+                if (additionalTravelTimeDueToAccessMatching < 0){
+                    additionalTravelTimeDueToAccessMatching = - additionalTravelTimeDueToAccessMatching; //TODO: reconsider for "negative additional travel time" cases
+                }
                 fitness += BETA * additionalTravelTimeDueToAccessMatching;
                 tripTimeChange += additionalTravelTimeDueToAccessMatching;
                 double additionalTravelTimeDueToEgressMatching = getTravelTimeChangeDueToEgressMatching(trip, destinationStationOfVehicle);
@@ -418,9 +422,9 @@ public class GeneticAlgorithm {
                 fitness += PENALTY_FOR_VEHICLE_CAPACITY_VIOLATION * (trips.size()-VEHICLE_CAPACITY);
             }
         }
-
         return fitness;
     }
+
     private static double getFitnessForNonPooledOrBaseTrip(UAMTrip trip, UAMStation originStationOfVehicle, UAMStation destinationStationOfVehicle, double fitness, boolean isFinalBestFeasibleSolution) {
         double tripTimeChange = 0.0;
         double tripFlightDistanceChange = 0.0;
@@ -438,11 +442,11 @@ public class GeneticAlgorithm {
         tripTimeChange += flightTimeChange;
         // calculate change in travel time due to access matching
         double travelTimeChangeDueToAccessMatching = trip.calculateAccessTeleportationTime(originStationOfVehicle) - trip.calculateAccessTeleportationTime(trip.getOriginStation());
+        tripTimeChange += travelTimeChangeDueToAccessMatching;
         if(travelTimeChangeDueToAccessMatching > 0) {
             fitness += BETA * travelTimeChangeDueToAccessMatching;
-            tripTimeChange += travelTimeChangeDueToAccessMatching;
         } else {
-            //fitness += BETA_NONE_POOLED_TRIP_EARLIER_DEPARTURE * travelTimeChangeDueToAccessMatching;
+            fitness += BETA * (- travelTimeChangeDueToAccessMatching);
         }
         // calculate change in travel time due to egress matching
         double travelTimeChangeDueToEgressMatching = getTravelTimeChangeDueToEgressMatching(trip, destinationStationOfVehicle);
