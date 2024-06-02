@@ -1,11 +1,17 @@
 package org.eqasim.sao_paulo.siting.ga;
 
-import com.google.ortools.Loader;
-import com.google.ortools.constraintsolver.*;
-import net.bhl.matsim.uam.infrastructure.UAMStation;
 import org.eqasim.sao_paulo.siting.Utils.*;
 
+import org.matsim.api.core.v01.Id;
+import org.matsim.contrib.dvrp.fleet.DvrpVehicle;
+import org.matsim.contrib.dvrp.fleet.ImmutableDvrpVehicleSpecification;
+import net.bhl.matsim.uam.infrastructure.UAMStation;
+import net.bhl.matsim.uam.infrastructure.UAMVehicle;
+import net.bhl.matsim.uam.infrastructure.UAMVehicleType;
+
 import org.apache.log4j.Logger;
+import com.google.ortools.Loader;
+import com.google.ortools.constraintsolver.*;
 
 import java.io.IOException;
 import java.util.*;
@@ -15,13 +21,6 @@ import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.io.FileWriter;
 import java.util.stream.Stream;
-
-import net.bhl.matsim.uam.infrastructure.UAMVehicle;
-import org.matsim.contrib.dvrp.fleet.DvrpVehicle;
-import net.bhl.matsim.uam.infrastructure.UAMVehicleType;
-import org.matsim.contrib.dvrp.fleet.ImmutableDvrpVehicleSpecification;
-import org.matsim.api.core.v01.Id;
-
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Callable;
 
