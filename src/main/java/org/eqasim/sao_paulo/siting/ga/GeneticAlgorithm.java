@@ -56,8 +56,8 @@ public class GeneticAlgorithm {
     // Variables for the UAM problem ===================================================================================
     private static final int BUFFER_START_TIME = 3600*7; // Buffer start time for the first trip
     private static final int BUFFER_END_TIME = 3600*7+240; // Buffer end time for the last trip
-    private static final double SEARCH_RADIUS_ORIGIN = Double.MAX_VALUE; // search radius for origin station
-    private static final double SEARCH_RADIUS_DESTINATION = Double.MAX_VALUE; // search radius for destination station
+    private static final double SEARCH_RADIUS_ORIGIN = 2000; // search radius for origin station
+    private static final double SEARCH_RADIUS_DESTINATION = 2000; // search radius for destination station
 
     // Helpers for the UAM problem =====================================================================================
     private static final double THRESHOLD_FOR_TRIPS_LONGER_THAN = SEARCH_RADIUS_ORIGIN;
@@ -96,7 +96,7 @@ public class GeneticAlgorithm {
     private static final int numProcessors = Runtime.getRuntime().availableProcessors();
     private static final int bufferDivider = 1;
 
-    // Main method to run the GA =======================================================================================
+    // Main method to run the the specifyed algorithm ==================================================================
     public static void main(String[] args) throws IOException, InterruptedException {
         // Load data
         DataLoader dataLoader = new DataLoader();
@@ -123,7 +123,7 @@ public class GeneticAlgorithm {
         saveStationVehicleNumber(subTrips);
         tripVehicleMap = findNearbyVehiclesToTrips(subTrips);
 
-        SolutionFitnessPair bestFeasibleSolutionFitnessPair = solveWithCP();
+        SolutionFitnessPair bestFeasibleSolutionFitnessPair = solveWithCP1();
         int[] bestFeasibleSolution = bestFeasibleSolutionFitnessPair.getSolution();
         System.out.println("Best feasible solution: " + Arrays.toString(bestFeasibleSolution));
         System.out.println("The fitness of the best feasible solution: " + bestFeasibleSolutionFitnessPair.getFitness());
@@ -136,8 +136,103 @@ public class GeneticAlgorithm {
         System.out.println("Threshold for trips longer than " + THRESHOLD_FOR_TRIPS_LONGER_THAN_STRING + ": " + NUMBER_OF_TRIPS_LONGER_TAHN);
     }
 
-    // CP solver =======================================================================================================
-    private static SolutionFitnessPair solveWithCP() {
+    // CP solver 1 =====================================================================================================
+    private static SolutionFitnessPair solveWithCP1() {
+        Solver solver = new Solver("SolveUAMTripAssignment");
+        solver.makeTimeLimit(1800*1000);
+
+        int numTrips = subTrips.size();
+        List<Integer> vehicleIds = tripVehicleMap.values().stream()
+                .flatMap(List::stream)
+                .map(v -> Integer.parseInt(v.getId().toString()))
+                .distinct()
+                .collect(Collectors.toList());
+        int numVehicles = vehicleIds.size();
+
+        // Variables: Trip assignment for each vehicle
+        IntVar[][] vehicleTripsAssignments = new IntVar[numVehicles][numTrips];
+        for (int v = 0; v < numVehicles; v++) {
+            for (int t = 0; t < numTrips; t++) {
+                vehicleTripsAssignments[v][t] = solver.makeIntVar(0, 1, "vehicle_" + v + "_trip_" + t);
+            }
+        }
+
+        // Constraints: Each trip must be assigned to exactly one vehicle
+        for (int t = 0; t < numTrips; t++) {
+            IntVar[] tripAssignments = new IntVar[numVehicles];
+            for (int v = 0; v < numVehicles; v++) {
+                tripAssignments[v] = vehicleTripsAssignments[v][t];
+            }
+            solver.addConstraint(solver.makeEquality(solver.makeSum(tripAssignments), 1));
+        }
+
+        // Constraints: Each vehicle cannot exceed its capacity
+        for (int v = 0; v < numVehicles; v++) {
+            IntVar vehicleLoad = solver.makeSum(vehicleTripsAssignments[v]).var();
+            solver.addConstraint(solver.makeLessOrEqual(vehicleLoad, VEHICLE_CAPACITY));
+        }
+
+        // Objective: Minimize the fitness function using getFitnessPerVehicle
+        IntVar objective = calculateFitnessForCP(solver, vehicleTripsAssignments, vehicleIds);
+        OptimizeVar mObjective = solver.makeMaximize(objective, 1);
+
+        // Flatten the IntVar[][] array into IntVar[] for the search phase
+        IntVar[] flattenedAssignments = Arrays.stream(vehicleTripsAssignments).flatMap(Arrays::stream).toArray(IntVar[]::new);
+
+        // Set up the search parameters
+        DecisionBuilder db = solver.makePhase(flattenedAssignments, Solver.CHOOSE_FIRST_UNBOUND, Solver.ASSIGN_MIN_VALUE);
+        solver.newSearch(db, mObjective);
+
+        SolutionFitnessPair bestFeasibleSolutionFitnessPair = null;
+
+        if (solver.nextSolution()) {
+            int[] bestSolution = new int[numTrips];
+            for (int t = 0; t < numTrips; t++) {
+                for (int v = 0; v < numVehicles; v++) {
+                    if (vehicleTripsAssignments[v][t].value() == 1) {
+                        bestSolution[t] = vehicleIds.get(v);
+                    }
+                }
+            }
+            double bestFitness = calculateFitness(bestSolution, false);
+            bestFeasibleSolutionFitnessPair = new SolutionFitnessPair(bestSolution, bestFitness);
+        }
+
+        solver.endSearch();
+        return bestFeasibleSolutionFitnessPair;
+    }
+    private static IntVar calculateFitnessForCP(Solver solver, IntVar[][] vehicleTripsAssignments, List<Integer> vehicleIds) {
+        int numTrips = vehicleTripsAssignments[0].length;
+        int numVehicles = vehicleTripsAssignments.length;
+        IntVar fitness = solver.makeIntVar(Integer.MIN_VALUE, Integer.MAX_VALUE, "fitness"); //TODO: need to specify the range.
+
+        // Sum up the fitness contributions for each vehicle
+        for (int v = 0; v < numVehicles; v++) {
+            // Accumulate the fitness for each vehicle
+            IntVar vehicleFitness = solver.makeIntVar(-1000000, 1000000, "vehicle_fitness_" + v); //TODO: need to specify the range.
+
+            for (int t = 0; t < numTrips; t++) {
+                // Create a map of vehicle assignments
+                Map<Integer, List<UAMTrip>> vehicleAssignments = new HashMap<>();
+                vehicleAssignments.put(vehicleIds.get(v), new ArrayList<>());
+
+                if (vehicleTripsAssignments[v][t].bound() && vehicleTripsAssignments[v][t].value() == 1) {
+                    vehicleAssignments.get(vehicleIds.get(v)).add(subTrips.get(t));
+                }
+
+                double fitnessContribution = getFitnessPerVehicle(false, vehicleAssignments, 0.0);
+                IntVar fitnessContributionVar = solver.makeIntConst((int) fitnessContribution);
+                vehicleFitness = solver.makeSum(vehicleFitness, fitnessContributionVar).var();
+            }
+
+            fitness = solver.makeSum(fitness, vehicleFitness).var();
+        }
+
+        return fitness;
+    }
+
+    // CP solver 2 =====================================================================================================
+    private static SolutionFitnessPair solveWithCP2() {
         Loader.loadNativeLibraries();
 
         CpModel model = new CpModel();
