@@ -11,7 +11,10 @@ import net.bhl.matsim.uam.infrastructure.UAMVehicleType;
 
 import org.apache.log4j.Logger;
 import com.google.ortools.Loader;
+import com.google.ortools.sat.*;
 import com.google.ortools.constraintsolver.*;
+import com.google.ortools.constraintsolver.IntVar;
+import com.google.ortools.util.Domain;
 
 import java.io.IOException;
 import java.util.*;
@@ -53,8 +56,8 @@ public class GeneticAlgorithm {
     // Variables for the UAM problem ===================================================================================
     private static final int BUFFER_START_TIME = 3600*7; // Buffer start time for the first trip
     private static final int BUFFER_END_TIME = 3600*7+240; // Buffer end time for the last trip
-    private static final double SEARCH_RADIUS_ORIGIN = 2000; // search radius for origin station
-    private static final double SEARCH_RADIUS_DESTINATION = 2000; // search radius for destination station
+    private static final double SEARCH_RADIUS_ORIGIN = Double.MAX_VALUE; // search radius for origin station
+    private static final double SEARCH_RADIUS_DESTINATION = Double.MAX_VALUE; // search radius for destination station
 
     // Helpers for the UAM problem =====================================================================================
     private static final double THRESHOLD_FOR_TRIPS_LONGER_THAN = SEARCH_RADIUS_ORIGIN;
@@ -120,7 +123,7 @@ public class GeneticAlgorithm {
         saveStationVehicleNumber(subTrips);
         tripVehicleMap = findNearbyVehiclesToTrips(subTrips);
 
-        SolutionFitnessPair bestFeasibleSolutionFitnessPair = solveWithGA();
+        SolutionFitnessPair bestFeasibleSolutionFitnessPair = solveWithCP();
         int[] bestFeasibleSolution = bestFeasibleSolutionFitnessPair.getSolution();
         System.out.println("Best feasible solution: " + Arrays.toString(bestFeasibleSolution));
         System.out.println("The fitness of the best feasible solution: " + bestFeasibleSolutionFitnessPair.getFitness());
@@ -131,6 +134,82 @@ public class GeneticAlgorithm {
 
         // Print the NUMBER_OF_TRIPS_LONGER_THAN
         System.out.println("Threshold for trips longer than " + THRESHOLD_FOR_TRIPS_LONGER_THAN_STRING + ": " + NUMBER_OF_TRIPS_LONGER_TAHN);
+    }
+
+    // CP solver =======================================================================================================
+    private static SolutionFitnessPair solveWithCP() {
+        Loader.loadNativeLibraries();
+
+        CpModel model = new CpModel();
+
+        // Create variables
+        int numTrips = subTrips.size();
+
+        // Variables: Vehicle assignment for each trip
+        com.google.ortools.sat.IntVar[] vehicleAssignments = new com.google.ortools.sat.IntVar[numTrips];
+        for (int i = 0; i < numTrips; i++) {
+            UAMTrip trip = subTrips.get(i);
+            List<UAMVehicle> availableVehicles = tripVehicleMap.get(trip.getTripId());
+            long[] availableVehicleIds = availableVehicles.stream().mapToLong(v -> Long.parseLong(v.getId().toString())).toArray();
+
+            // Define the domain of the variable to be the available vehicles for this trip
+            vehicleAssignments[i] = model.newIntVarFromDomain(Domain.fromValues(availableVehicleIds), "vehicle_" + i);
+        }
+
+
+        // Constraints: Each vehicle cannot exceed its capacity
+        for (int vehicleId : tripVehicleMap.values().stream().flatMap(List::stream).mapToInt(v -> Integer.parseInt(v.getId().toString())).distinct().toArray()) {
+            com.google.ortools.sat.IntVar vehicleCapacityUsage = model.newIntVar(0, VEHICLE_CAPACITY, "vehicleCapacityUsage_" + vehicleId);
+            com.google.ortools.sat.IntVar[] vehicleLoad = new com.google.ortools.sat.IntVar[numTrips];
+            for (int i = 0; i < numTrips; i++) {
+                vehicleLoad[i] = model.newIntVar(0, 1, "vehicleLoad_" + i + "_" + vehicleId);
+                model.addEquality(vehicleLoad[i], model.newConstant(vehicleAssignments[i].getIndex()));
+            }
+
+            // Create a list of indices of the vehicleLoad variables
+            int[] vehicleLoadIndices = Arrays.stream(vehicleLoad).mapToInt(com.google.ortools.sat.IntVar::getIndex).toArray();
+            model.addEquality(vehicleCapacityUsage, model.newConstant(Arrays.stream(vehicleLoadIndices).sum()));
+            model.addLessOrEqual(vehicleCapacityUsage, VEHICLE_CAPACITY);
+        }
+
+
+        // Create solver and set parameters
+        CpSolver solver = new CpSolver();
+        solver.getParameters().setMaxTimeInSeconds(3600.0);
+        solver.getParameters().setNumWorkers(1);
+
+        // Solve the problem
+        CpSolverStatus status = solver.solve(model);
+
+        // Objective: maximize the fitness
+        // Create a variable to hold the total fitness and set it as the objective
+        com.google.ortools.sat.IntVar totalFitness = model.newIntVar(Integer.MIN_VALUE, Integer.MAX_VALUE, "totalFitness");
+        LinearExprBuilder fitnessExpr = LinearExpr.newBuilder();
+
+        // Use getFitnessPerVehicle logic to create the fitness expression
+        Map<Integer, List<UAMTrip>> vehicleAssignmentsMap = new HashMap<>();
+        for (int i = 0; i < numTrips; i++) {
+            int vehicleId = (int) solver.value(vehicleAssignments[i]);
+            vehicleAssignmentsMap.putIfAbsent(vehicleId, new ArrayList<>());
+            vehicleAssignmentsMap.get(vehicleId).add(subTrips.get(i));
+        }
+        long fitness = (long) getFitnessPerVehicle(false, vehicleAssignmentsMap, 0.0);
+        fitnessExpr.addTerm(totalFitness, fitness);
+
+        model.maximize(fitnessExpr);
+
+        if (status == CpSolverStatus.OPTIMAL || status == CpSolverStatus.FEASIBLE) {
+            // Extract the best solution
+            int[] bestSolution = new int[numTrips];
+            for (int i = 0; i < numTrips; i++) {
+                bestSolution[i] = (int) solver.value(vehicleAssignments[i]);
+            }
+            double bestFitness = solver.value(totalFitness);
+            return new SolutionFitnessPair(bestSolution, bestFitness);
+        } else {
+            throw new IllegalStateException("No feasible solution found within the time limit.");
+        }
+
     }
 
     // GA solver =======================================================================================================
