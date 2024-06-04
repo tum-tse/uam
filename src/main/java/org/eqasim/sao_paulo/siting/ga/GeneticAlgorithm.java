@@ -38,9 +38,9 @@ public class GeneticAlgorithm {
     private static final double CROSSOVER_RATE = 0.7; // Crossover rate
     private static final int TOURNAMENT_SIZE = 5; // Tournament size for selection
 
-    private static final double ALPHA = - 0.001; // Weight for changed flight distances
+    private static final double ALPHA = - 1; // Weight for changed flight distances
     private static final double BETA = - 1; // Weight for change in travel time
-    private static final double BETA_NONE_POOLED_TRIP_EARLIER_DEPARTURE = - 0.1; //TODO: need to reconsider the value
+    private static final double BETA_CRUCIAL_TIME_ChANGE = - 0.1; //TODO: need to reconsider the value
     private static final double PENALTY_FOR_VEHICLE_CAPACITY_VIOLATION = -10000;
 
     private static final long SEED = 4711; // MATSim default Random Seed
@@ -56,8 +56,8 @@ public class GeneticAlgorithm {
     // Variables for the UAM problem ===================================================================================
     private static final int BUFFER_START_TIME = 3600*7; // Buffer start time for the first trip
     private static final int BUFFER_END_TIME = 3600*7+240; // Buffer end time for the last trip
-    private static final double SEARCH_RADIUS_ORIGIN = 2000; // search radius for origin station
-    private static final double SEARCH_RADIUS_DESTINATION = 2000; // search radius for destination station
+    private static final double SEARCH_RADIUS_ORIGIN = 1500; // search radius for origin station
+    private static final double SEARCH_RADIUS_DESTINATION = 1500; // search radius for destination station
 
     // Helpers for the UAM problem =====================================================================================
     private static final double THRESHOLD_FOR_TRIPS_LONGER_THAN = SEARCH_RADIUS_ORIGIN;
@@ -95,7 +95,7 @@ public class GeneticAlgorithm {
     // Parallel computing
     private static final int numProcessors = Runtime.getRuntime().availableProcessors();
     private static final int bufferDivider = 1;
-
+//TODO: How to handle the extremely large travel time?
     // Main method to run the the specifyed algorithm ==================================================================
     public static void main(String[] args) throws IOException, InterruptedException {
         // Load data
@@ -123,7 +123,7 @@ public class GeneticAlgorithm {
         saveStationVehicleNumber(subTrips);
         tripVehicleMap = findNearbyVehiclesToTrips(subTrips);
 
-        SolutionFitnessPair bestFeasibleSolutionFitnessPair = solveWithCP1();
+        SolutionFitnessPair bestFeasibleSolutionFitnessPair = solveWithGA();
         int[] bestFeasibleSolution = bestFeasibleSolutionFitnessPair.getSolution();
         System.out.println("Best feasible solution: " + Arrays.toString(bestFeasibleSolution));
         System.out.println("The fitness of the best feasible solution: " + bestFeasibleSolutionFitnessPair.getFitness());
@@ -562,12 +562,13 @@ public class GeneticAlgorithm {
                 tripTimeChange += flightTimeChange;
                 // calculate additional travel time
                 double originalArrivalTimeForThePooledTrip = trip.getDepartureTime() + trip.calculateAccessTeleportationTime(trip.getOriginStation());
-                double additionalTravelTimeDueToAccessMatching = boardingTimeForAllTrips - originalArrivalTimeForThePooledTrip;
-                if (additionalTravelTimeDueToAccessMatching < 0){
-                    additionalTravelTimeDueToAccessMatching = - additionalTravelTimeDueToAccessMatching; //TODO: reconsider for "negative additional travel time" cases
+                double travelTimeChangeDueToAccessMatching = boardingTimeForAllTrips - originalArrivalTimeForThePooledTrip;
+                tripTimeChange += travelTimeChangeDueToAccessMatching;
+                if(travelTimeChangeDueToAccessMatching > 0) {
+                    fitness += BETA * travelTimeChangeDueToAccessMatching;
+                } else {
+                    fitness += BETA * (- travelTimeChangeDueToAccessMatching); //TODO: reconsider for "negative additional travel time" cases
                 }
-                fitness += BETA * additionalTravelTimeDueToAccessMatching;
-                tripTimeChange += additionalTravelTimeDueToAccessMatching;
                 double additionalTravelTimeDueToEgressMatching = getTravelTimeChangeDueToEgressMatching(trip, destinationStationOfVehicle);
                 fitness += BETA * additionalTravelTimeDueToEgressMatching;
                 tripTimeChange += additionalTravelTimeDueToEgressMatching;
