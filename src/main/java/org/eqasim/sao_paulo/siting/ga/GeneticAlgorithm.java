@@ -95,7 +95,8 @@ public class GeneticAlgorithm {
     // Parallel computing
     private static final int numProcessors = Runtime.getRuntime().availableProcessors();
     private static final int bufferDivider = 1;
-//TODO: How to handle the extremely large travel time?
+// TODO: Create an initial population of solutions using domain-specific knowledge (in our case is the vehicles which were used to create the initial fleet of the vehicles).
+// TODO: How to handle the extremely large travel time?
     // Main method to run the the specifyed algorithm ==================================================================
     public static void main(String[] args) throws IOException, InterruptedException {
         // Load data
