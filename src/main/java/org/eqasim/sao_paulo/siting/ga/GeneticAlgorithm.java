@@ -95,8 +95,8 @@ public class GeneticAlgorithm {
     // Parallel computing
     private static final int numProcessors = Runtime.getRuntime().availableProcessors();
     private static final int bufferDivider = 1;
-// TODO: Create an initial population of solutions using domain-specific knowledge (in our case is the vehicles which were used to create the initial fleet of the vehicles).
-// TODO: How to handle the extremely large travel time?
+    // TODO: Create an initial population of solutions using domain-specific knowledge (in our case is the vehicles which were used to create the initial fleet of the vehicles).
+    // TODO: How to handle the extremely large travel time?
     // Main method to run the the specifyed algorithm ==================================================================
     public static void main(String[] args) throws IOException, InterruptedException {
         // Load data
@@ -836,20 +836,38 @@ public class GeneticAlgorithm {
             System.out.println("Capacity " + capacity + ": " + count + " vehicles, Rate: " + rate);
         }
 
-        Collection<Double> travelTimeChanges = finalSolutionTravelTimeChanges.values();
-        List<Double> sortedTravelTimeChanges = new ArrayList<>(travelTimeChanges);
+        // Collect travel time changes only for trips assigned to a vehicle shared with others
+        List<Double> sharedTravelTimeChanges = new ArrayList<>();
+        for (int vehicleId : uniqueVehicles) {
+            List<Integer> tripsForVehicle = new ArrayList<>();
+            for (int i = 0; i < solution.length; i++) {
+                if (solution[i] == vehicleId) {
+                    tripsForVehicle.add(i);
+                }
+            }
+            if (tripsForVehicle.size() > 1) { // Vehicle shared with others
+                for (int tripIndex : tripsForVehicle) {
+                    String tripId = subTrips.get(tripIndex).getTripId();
+                    if (finalSolutionTravelTimeChanges.containsKey(tripId)) {
+                        sharedTravelTimeChanges.add(finalSolutionTravelTimeChanges.get(tripId));
+                    }
+                }
+            }
+        }
+
+        List<Double> sortedTravelTimeChanges = new ArrayList<>(sharedTravelTimeChanges);
         Collections.sort(sortedTravelTimeChanges);
 
         double averageTravelTime = sortedTravelTimeChanges.stream()
                 .mapToDouble(Double::doubleValue)
                 .average()
                 .orElse(Double.NaN);
-        double percentile5thTravelTime = sortedTravelTimeChanges.get((int) (0.05 * sortedTravelTimeChanges.size()));
-        double percentile95thTravelTime = sortedTravelTimeChanges.get((int) (0.95 * sortedTravelTimeChanges.size()) - 1);
+        double percentile5thTravelTime = sortedTravelTimeChanges.isEmpty() ? Double.NaN : sortedTravelTimeChanges.get((int) (0.05 * sortedTravelTimeChanges.size()));
+        double percentile95thTravelTime = sortedTravelTimeChanges.isEmpty() ? Double.NaN : sortedTravelTimeChanges.get((int) (0.95 * sortedTravelTimeChanges.size()) - 1);
 
-        System.out.println("Average travel time change: " + averageTravelTime);
-        System.out.println("5th percentile of travel time change: " + percentile5thTravelTime);
-        System.out.println("95th percentile of travel time change: " + percentile95thTravelTime);
+        System.out.println("Average travel time change (shared vehicles): " + averageTravelTime);
+        System.out.println("5th percentile of travel time change (shared vehicles): " + percentile5thTravelTime);
+        System.out.println("95th percentile of travel time change (shared vehicles): " + percentile95thTravelTime);
 
         Collection<Double> flightDistanceChanges = finalSolutionFlightDistanceChanges.values();
         List<Double> sortedFlightDistanceChanges = new ArrayList<>(flightDistanceChanges);
@@ -859,8 +877,8 @@ public class GeneticAlgorithm {
                 .mapToDouble(Double::doubleValue)
                 .average()
                 .orElse(Double.NaN);
-        double percentile5thFlightDistance = sortedFlightDistanceChanges.get((int) (0.05 * sortedFlightDistanceChanges.size()));
-        double percentile95thFlightDistance = sortedFlightDistanceChanges.get((int) (0.95 * sortedFlightDistanceChanges.size()) - 1);
+        double percentile5thFlightDistance = sortedFlightDistanceChanges.isEmpty() ? Double.NaN : sortedFlightDistanceChanges.get((int) (0.05 * sortedFlightDistanceChanges.size()));
+        double percentile95thFlightDistance = sortedFlightDistanceChanges.isEmpty() ? Double.NaN : sortedFlightDistanceChanges.get((int) (0.95 * sortedFlightDistanceChanges.size()) - 1);
 
         System.out.println("Average flight distance change: " + averageFlightDistance);
         System.out.println("5th percentile of flight distance change: " + percentile5thFlightDistance);
@@ -874,8 +892,8 @@ public class GeneticAlgorithm {
                 .mapToDouble(Double::doubleValue)
                 .average()
                 .orElse(Double.NaN);
-        double percentile5thDepartureRedirectionRate = sortedDepartureRedirectionRates.get((int) (0.05 * sortedDepartureRedirectionRates.size()));
-        double percentile95thDepartureRedirectionRate = sortedDepartureRedirectionRates.get((int) (0.95 * sortedDepartureRedirectionRates.size()) - 1);
+        double percentile5thDepartureRedirectionRate = sortedDepartureRedirectionRates.isEmpty() ? Double.NaN : sortedDepartureRedirectionRates.get((int) (0.05 * sortedDepartureRedirectionRates.size()));
+        double percentile95thDepartureRedirectionRate = sortedDepartureRedirectionRates.isEmpty() ? Double.NaN : sortedDepartureRedirectionRates.get((int) (0.95 * sortedDepartureRedirectionRates.size()) - 1);
 
         System.out.println("Average departure redirection rate: " + averageDepartureRedirectionRate);
         System.out.println("5th percentile of departure redirection rate: " + percentile5thDepartureRedirectionRate);
@@ -889,8 +907,8 @@ public class GeneticAlgorithm {
                 .mapToDouble(Double::doubleValue)
                 .average()
                 .orElse(Double.NaN);
-        double percentile5thArrivalRedirectionRate = sortedArrivalRedirectionRates.get((int) (0.05 * sortedArrivalRedirectionRates.size()));
-        double percentile95thArrivalRedirectionRate = sortedArrivalRedirectionRates.get((int) (0.95 * sortedArrivalRedirectionRates.size()) - 1);
+        double percentile5thArrivalRedirectionRate = sortedArrivalRedirectionRates.isEmpty() ? Double.NaN : sortedArrivalRedirectionRates.get((int) (0.05 * sortedArrivalRedirectionRates.size()));
+        double percentile95thArrivalRedirectionRate = sortedArrivalRedirectionRates.isEmpty() ? Double.NaN : sortedArrivalRedirectionRates.get((int) (0.95 * sortedArrivalRedirectionRates.size()) - 1);
 
         System.out.println("Average arrival redirection rate: " + averageArrivalRedirectionRate);
         System.out.println("5th percentile of arrival redirection rate: " + percentile5thArrivalRedirectionRate);
