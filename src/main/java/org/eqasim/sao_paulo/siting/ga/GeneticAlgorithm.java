@@ -524,12 +524,12 @@ public class GeneticAlgorithm {
                 continue;
             }
 
-            // Find the base trip (the trip with the earliest arrival time at the departure UAM station)
+            // Find the base trip (the trip with the latest arrival time at the departure UAM station)
             UAMTrip baseTrip = trips.get(0);
             for (UAMTrip trip : trips) {
                 double accessTimeOfBaseTrip = baseTrip.calculateAccessTeleportationTime(originStationOfVehicle);
                 double accessTimeOfPooledTrip = trip.calculateAccessTeleportationTime(originStationOfVehicle);
-                if ((trip.getDepartureTime() + accessTimeOfPooledTrip) >= (baseTrip.getDepartureTime() + accessTimeOfBaseTrip)) {
+                if ((trip.getDepartureTime() + accessTimeOfPooledTrip) > (baseTrip.getDepartureTime() + accessTimeOfBaseTrip)) {
                     baseTrip = trip;
                 }
             }
@@ -600,7 +600,6 @@ public class GeneticAlgorithm {
         }
         return fitness;
     }
-
     private static double getFitnessForNonPooledOrBaseTrip(UAMTrip trip, UAMStation originStationOfVehicle, UAMStation destinationStationOfVehicle, double fitness, boolean isFinalBestFeasibleSolution) {
         double tripTimeChange = 0.0;
         double tripFlightDistanceChange = 0.0;
