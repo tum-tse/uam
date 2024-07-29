@@ -553,7 +553,7 @@ public class GeneticAlgorithm {
                 // calculate saved flight distance
                 double savedFlightDistance = trip.calculateFlightDistance(trip.getOriginStation(), trip.getDestinationStation());
                 fitness += ALPHA * (-1) * savedFlightDistance;
-                tripFlightDistanceChange += flightDistanceChange;
+                tripFlightDistanceChange += savedFlightDistance;
                 if(isFinalBestFeasibleSolution){
                     finalSolutionFlightDistanceChanges.put(trip.getTripId(), tripFlightDistanceChange);
                 }
