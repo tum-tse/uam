@@ -63,6 +63,7 @@ public class GeneticAlgorithm {
     private static final double THRESHOLD_FOR_TRIPS_LONGER_THAN = SEARCH_RADIUS_ORIGIN;
     private static final String THRESHOLD_FOR_TRIPS_LONGER_THAN_STRING = String.valueOf(THRESHOLD_FOR_TRIPS_LONGER_THAN);
     private static int NUMBER_OF_TRIPS_LONGER_TAHN = 0;
+    private static int SHARED_RIDE_TRAVEL_TIME_CHANGE_THRESHOLD = 500;
 
     // Assuming these arrays are initialized elsewhere in your code:
     private static double[] flightDistances; // Distances for each trip
@@ -837,6 +838,8 @@ public class GeneticAlgorithm {
 
         // Collect travel time changes only for trips assigned to a vehicle shared with others
         List<Double> sharedTravelTimeChanges = new ArrayList<>();
+        int sharedRidesExceedingThreshold = 0;  // Counter for shared rides with travel time changes exceeding threshold
+
         for (int vehicleId : uniqueVehicles) {
             List<Integer> tripsForVehicle = new ArrayList<>();
             for (int i = 0; i < solution.length; i++) {
@@ -848,11 +851,22 @@ public class GeneticAlgorithm {
                 for (int tripIndex : tripsForVehicle) {
                     String tripId = subTrips.get(tripIndex).getTripId();
                     if (finalSolutionTravelTimeChanges.containsKey(tripId)) {
-                        sharedTravelTimeChanges.add(finalSolutionTravelTimeChanges.get(tripId));
+                        double travelTimeChange = finalSolutionTravelTimeChanges.get(tripId);
+                        sharedTravelTimeChanges.add(travelTimeChange);
+                        if (travelTimeChange > SHARED_RIDE_TRAVEL_TIME_CHANGE_THRESHOLD) {
+                            sharedRidesExceedingThreshold++;  // Increment counter
+                        }
                     }
                 }
             }
         }
+
+        // Calculate and print the share of shared rides with travel time changes exceeding threshold
+        int totalSharedRides = sharedTravelTimeChanges.size();
+        double shareExceedingThreshold = totalSharedRides == 0 ? 0 : (double) sharedRidesExceedingThreshold / totalSharedRides;
+        System.out.println("Share of shared rides with travel time changes exceeding" + SHARED_RIDE_TRAVEL_TIME_CHANGE_THRESHOLD + ": " + shareExceedingThreshold);
+        double totalShareExceedingThreshold = subTrips.isEmpty() ? 0 : (double) sharedRidesExceedingThreshold / subTrips.size();
+        System.out.println("Total share of shared rides with travel time changes exceeding" + SHARED_RIDE_TRAVEL_TIME_CHANGE_THRESHOLD + ": " + totalShareExceedingThreshold);
 
         List<Double> sortedTravelTimeChanges = new ArrayList<>(sharedTravelTimeChanges);
         Collections.sort(sortedTravelTimeChanges);
