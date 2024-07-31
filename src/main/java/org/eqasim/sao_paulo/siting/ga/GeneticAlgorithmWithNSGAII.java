@@ -11,16 +11,15 @@ import net.bhl.matsim.uam.infrastructure.UAMVehicleType;
 import org.apache.log4j.Logger;
 import org.uma.jmetal.algorithm.multiobjective.nsgaii.NSGAIIBuilder;
 import org.uma.jmetal.operator.crossover.CrossoverOperator;
-import org.uma.jmetal.operator.crossover.impl.SBXCrossover;
+import org.uma.jmetal.operator.crossover.impl.IntegerSBXCrossover;
 import org.uma.jmetal.operator.mutation.MutationOperator;
-import org.uma.jmetal.operator.mutation.impl.PolynomialMutation;
+import org.uma.jmetal.operator.mutation.impl.IntegerPolynomialMutation;
 import org.uma.jmetal.operator.selection.SelectionOperator;
 import org.uma.jmetal.operator.selection.impl.BinaryTournamentSelection;
 import org.uma.jmetal.problem.Problem;
-import org.uma.jmetal.solution.Solution;
 import org.uma.jmetal.solution.integersolution.impl.DefaultIntegerSolution;
+import org.uma.jmetal.solution.integersolution.IntegerSolution;
 import org.uma.jmetal.util.evaluator.impl.SequentialSolutionListEvaluator;
-import org.uma.jmetal.util.evaluator.SolutionListEvaluator;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -46,7 +45,6 @@ public class GeneticAlgorithmWithNSGAII {
 
     private static final double ALPHA = -1;
     private static final double BETA = -1;
-    private static final double BETA_CRUCIAL_TIME_CHANGE = -0.1;
     private static final double PENALTY_FOR_VEHICLE_CAPACITY_VIOLATION = -10000;
 
     private static final int VEHICLE_CAPACITY = 4;
@@ -54,6 +52,10 @@ public class GeneticAlgorithmWithNSGAII {
     private static List<UAMTrip> subTrips;
     private static Map<Id<UAMStation>, UAMStation> stations;
     private static Map<String, List<UAMVehicle>> tripVehicleMap;
+    private static Map<Id<DvrpVehicle>, UAMStation> vehicleOriginStationMap = new HashMap<>();
+    private static Map<Id<DvrpVehicle>, UAMStation> vehicleDestinationStationMap = new HashMap<>();
+    private static Map<Id<UAMStation>, List<UAMVehicle>> originStationVehicleMap = new HashMap<>();
+    private static int FIRST_UAM_VEHICLE_ID = 1;
 
     public static void main(String[] args) throws Exception {
         // Load data
@@ -78,19 +80,23 @@ public class GeneticAlgorithmWithNSGAII {
         tripVehicleMap = findNearbyVehiclesToTrips(subTrips);
 
         // Define the problem
-        Problem<DefaultIntegerSolution> problem = new UAMProblem();
+        Problem<IntegerSolution> problem = new UAMProblem(
+                subTrips.stream().map(trip -> Pair.of(0, tripVehicleMap.get(trip.getTripId()).size() - 1)).collect(Collectors.toList()),
+                2,
+                1
+        );
 
         // Define the crossover operator
-        CrossoverOperator<DefaultIntegerSolution> crossover = new SBXCrossover(CROSSOVER_PROBABILITY, DISTRIBUTION_INDEX_FOR_CROSSOVER);
+        CrossoverOperator<IntegerSolution> crossover = new IntegerSBXCrossover(CROSSOVER_PROBABILITY, DISTRIBUTION_INDEX_FOR_CROSSOVER);
 
         // Define the mutation operator
-        MutationOperator<DefaultIntegerSolution> mutation = new PolynomialMutation(MUTATION_PROBABILITY, DISTRIBUTION_INDEX_FOR_MUTATION);
+        MutationOperator<IntegerSolution> mutation = new IntegerPolynomialMutation(MUTATION_PROBABILITY, DISTRIBUTION_INDEX_FOR_MUTATION);
 
         // Define the selection operator
-        SelectionOperator<List<DefaultIntegerSolution>, DefaultIntegerSolution> selection = new BinaryTournamentSelection<>();
+        SelectionOperator<List<IntegerSolution>, IntegerSolution> selection = new BinaryTournamentSelection<>();
 
         // Create the NSGA-II algorithm
-        NSGAIIBuilder<DefaultIntegerSolution> builder = new NSGAIIBuilder<>(problem, crossover, mutation);
+        NSGAIIBuilder<IntegerSolution> builder = new NSGAIIBuilder<>(problem, crossover, mutation, POPULATION_SIZE);
         builder.setSelectionOperator(selection);
         builder.setSolutionListEvaluator(new SequentialSolutionListEvaluator<>());
         builder.setMaxEvaluations(MAX_EVALUATIONS);
@@ -102,15 +108,22 @@ public class GeneticAlgorithmWithNSGAII {
         algorithm.run();
 
         // Get the result
-        List<DefaultIntegerSolution> result = algorithm.getResult();
+        List<IntegerSolution> result = algorithm.getResult();
 
         // Print the Pareto front
-        for (DefaultIntegerSolution solution : result) {
-            System.out.println("Solution: " + solution.getObjectives()[0] + ", " + solution.getObjectives()[1]);
+        for (IntegerSolution solution : result) {
+            System.out.println("Solution: " + solution.getObjective(0) + ", " + solution.getObjective(1));
         }
     }
 
-    public static class UAMProblem extends DefaultIntegerSolution implements Problem<DefaultIntegerSolution> {
+    public static class UAMProblem extends DefaultIntegerSolution implements Problem<IntegerSolution> {
+        /**
+         * Constructor
+         *
+         * @param bounds
+         * @param numberOfObjectives
+         * @param numberOfConstraints
+         */
         public UAMProblem(List<Pair<Integer, Integer>> bounds, int numberOfObjectives, int numberOfConstraints) {
             super(bounds, numberOfObjectives, numberOfConstraints);
         }
@@ -127,7 +140,7 @@ public class GeneticAlgorithmWithNSGAII {
 
         @Override
         public int getNumberOfConstraints() {
-            return 0;
+            return 1;
         }
 
         @Override
@@ -136,8 +149,8 @@ public class GeneticAlgorithmWithNSGAII {
         }
 
         @Override
-        public DefaultIntegerSolution createSolution() {
-            DefaultIntegerSolution solution = new DefaultIntegerSolution(this);
+        public IntegerSolution createSolution() {
+            IntegerSolution solution = new DefaultIntegerSolution(this);
             for (int i = 0; i < getNumberOfVariables(); i++) {
                 solution.setVariable(i, rand.nextInt(50));
             }
@@ -145,27 +158,31 @@ public class GeneticAlgorithmWithNSGAII {
         }
 
         @Override
-        public void evaluate(DefaultIntegerSolution solution) {
+        public void evaluate(IntegerSolution solution) {
             int[] individual = new int[getNumberOfVariables()];
             for (int i = 0; i < getNumberOfVariables(); i++) {
                 individual[i] = solution.getVariable(i);
             }
 
-            double[] objectives = calculateFitness(individual);
+            double[] objectives = calculateObjectives(individual);
             solution.setObjective(0, objectives[0]);
             solution.setObjective(1, objectives[1]);
         }
 
-        private double[] calculateFitness(int[] individual) {
-            double fitness1 = 0.0;
-            double fitness2 = 0.0;
-            Map<Integer, List<UAMTrip>> vehicleAssignments = new HashMap<>();
+        private double[] calculateObjectives(int[] individual) {
+            double savedFlightDistance = computeSavedFlightDistance(individual);
+            double additionalTravelTime = computeAdditionalTravelTime(individual);
 
+            return new double[]{savedFlightDistance, additionalTravelTime};
+        }
+
+        private double computeSavedFlightDistance(int[] individual) {
+            double totalSavedDistance = 0.0;
+
+            Map<Integer, List<UAMTrip>> vehicleAssignments = new HashMap<>();
             for (int i = 0; i < individual.length; i++) {
                 int vehicleId = individual[i];
-                if (!vehicleAssignments.containsKey(vehicleId)) {
-                    vehicleAssignments.put(vehicleId, new ArrayList<>());
-                }
+                vehicleAssignments.putIfAbsent(vehicleId, new ArrayList<>());
                 vehicleAssignments.get(vehicleId).add(subTrips.get(i));
             }
 
@@ -175,84 +192,42 @@ public class GeneticAlgorithmWithNSGAII {
                 UAMStation destinationStationOfVehicle = vehicleDestinationStationMap.get(Id.create(entry.getKey().toString(), DvrpVehicle.class));
 
                 if (trips.isEmpty()) continue;
-                if (trips.size() == 1) {
-                    UAMTrip trip = trips.get(0);
-                    fitness1 += getFitnessForNonPooledOrBaseTrip(trip, originStationOfVehicle, destinationStationOfVehicle);
-                    continue;
-                }
 
-                UAMTrip baseTrip = trips.get(0);
                 for (UAMTrip trip : trips) {
-                    double accessTimeOfBaseTrip = baseTrip.calculateAccessTeleportationTime(originStationOfVehicle);
-                    double accessTimeOfPooledTrip = trip.calculateAccessTeleportationTime(originStationOfVehicle);
-                    if ((trip.getDepartureTime() + accessTimeOfPooledTrip) > (baseTrip.getDepartureTime() + accessTimeOfBaseTrip)) {
-                        baseTrip = trip;
-                    }
-                }
-
-                double boardingTimeForAllTrips = baseTrip.getDepartureTime() + baseTrip.calculateAccessTeleportationTime(originStationOfVehicle);
-                for (UAMTrip trip : trips) {
-                    if (trip.getTripId().equals(baseTrip.getTripId())) {
-                        fitness1 += getFitnessForNonPooledOrBaseTrip(trip, originStationOfVehicle, destinationStationOfVehicle);
-                        continue;
-                    }
-
-                    double flightDistanceChange = getFlightDistanceChange(trip, originStationOfVehicle, destinationStationOfVehicle);
-                    fitness1 += ALPHA * flightDistanceChange;
-
-                    double savedFlightDistance = trip.calculateFlightDistance(trip.getOriginStation(), trip.getDestinationStation());
-                    fitness1 += ALPHA * (-1) * savedFlightDistance;
-
-                    double flightTimeChange = flightDistanceChange / VEHICLE_CRUISE_SPEED;
-                    fitness1 += BETA * flightTimeChange;
-
-                    double originalArrivalTimeForThePooledTrip = trip.getDepartureTime() + trip.calculateAccessTeleportationTime(trip.getOriginStation());
-                    double travelTimeChangeDueToAccessMatching = boardingTimeForAllTrips - originalArrivalTimeForThePooledTrip;
-
-                    if (travelTimeChangeDueToAccessMatching > 0) {
-                        fitness1 += BETA * travelTimeChangeDueToAccessMatching;
-                    } else {
-                        fitness1 += BETA * (-travelTimeChangeDueToAccessMatching);
-                    }
-
-                    double additionalTravelTimeDueToEgressMatching = getTravelTimeChangeDueToEgressMatching(trip, destinationStationOfVehicle);
-                    fitness1 += BETA * additionalTravelTimeDueToEgressMatching;
-
-                    fitness2 += PENALTY_FOR_VEHICLE_CAPACITY_VIOLATION * (trips.size() - VEHICLE_CAPACITY);
+                    double savedDistance = trip.calculateFlightDistance(trip.getOriginStation(), trip.getDestinationStation())
+                            - trip.calculateFlightDistance(originStationOfVehicle, destinationStationOfVehicle);
+                    totalSavedDistance += savedDistance;
                 }
             }
 
-            return new double[]{fitness1, fitness2};
+            return totalSavedDistance;
         }
 
-        private double getFitnessForNonPooledOrBaseTrip(UAMTrip trip, UAMStation originStationOfVehicle, UAMStation destinationStationOfVehicle) {
-            double fitness = 0.0;
+        private double computeAdditionalTravelTime(int[] individual) {
+            double totalAdditionalTravelTime = 0.0;
 
-            double flightDistanceChange = getFlightDistanceChange(trip, originStationOfVehicle, destinationStationOfVehicle);
-            fitness += ALPHA * flightDistanceChange;
-
-            double flightTimeChange = flightDistanceChange / VEHICLE_CRUISE_SPEED;
-            fitness += BETA * flightTimeChange;
-
-            double travelTimeChangeDueToAccessMatching = trip.calculateAccessTeleportationTime(originStationOfVehicle) - trip.calculateAccessTeleportationTime(trip.getOriginStation());
-            if (travelTimeChangeDueToAccessMatching > 0) {
-                fitness += BETA * travelTimeChangeDueToAccessMatching;
-            } else {
-                fitness += BETA * (-travelTimeChangeDueToAccessMatching);
+            Map<Integer, List<UAMTrip>> vehicleAssignments = new HashMap<>();
+            for (int i = 0; i < individual.length; i++) {
+                int vehicleId = individual[i];
+                vehicleAssignments.putIfAbsent(vehicleId, new ArrayList<>());
+                vehicleAssignments.get(vehicleId).add(subTrips.get(i));
             }
 
-            double travelTimeChangeDueToEgressMatching = getTravelTimeChangeDueToEgressMatching(trip, destinationStationOfVehicle);
-            fitness += BETA * travelTimeChangeDueToEgressMatching;
+            for (Map.Entry<Integer, List<UAMTrip>> entry : vehicleAssignments.entrySet()) {
+                List<UAMTrip> trips = entry.getValue();
+                UAMStation originStationOfVehicle = vehicleOriginStationMap.get(Id.create(entry.getKey().toString(), DvrpVehicle.class));
+                UAMStation destinationStationOfVehicle = vehicleDestinationStationMap.get(Id.create(entry.getKey().toString(), DvrpVehicle.class));
 
-            return fitness;
-        }
+                if (trips.isEmpty()) continue;
 
-        private double getFlightDistanceChange(UAMTrip trip, UAMStation originStationOfVehicle, UAMStation destinationStationOfVehicle) {
-            return trip.calculateFlightDistance(originStationOfVehicle, destinationStationOfVehicle) - trip.calculateFlightDistance(trip.getOriginStation(), trip.getDestinationStation());
-        }
+                for (UAMTrip trip : trips) {
+                    double additionalTime = trip.calculateAccessTeleportationTime(originStationOfVehicle) + trip.calculateEgressTeleportationTime(destinationStationOfVehicle)
+                            - trip.calculateAccessTeleportationTime(trip.getOriginStation()) - trip.calculateEgressTeleportationTime(trip.getDestinationStation());
+                    totalAdditionalTravelTime += additionalTime;
+                }
+            }
 
-        private double getTravelTimeChangeDueToEgressMatching(UAMTrip trip, UAMStation destinationStationOfVehicle) {
-            return trip.calculateEgressTeleportationTime(destinationStationOfVehicle) - trip.calculateEgressTeleportationTime(trip.getDestinationStation());
+            return totalAdditionalTravelTime;
         }
     }
 
