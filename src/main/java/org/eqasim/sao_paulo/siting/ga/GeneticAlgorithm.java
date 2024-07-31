@@ -1292,17 +1292,38 @@ public class GeneticAlgorithm {
                 solver.addConstraint(solver.makeLessOrEqual(vehicleCapacityUsage, VEHICLE_CAPACITY));
             }
 
-            // Objective: Minimize the number of changes in vehicle assignments
+            // Objective: Minimize the number of changes in vehicle assignments and prefer pooling
             int[] initialAssignments = Arrays.copyOf(solution, solution.length);
             IntVar[] assignmentChanges = new IntVar[numTrips];
             for (int i = 0; i < numTrips; i++) {
                 assignmentChanges[i] = solver.makeIsDifferentCstVar(vehicleAssignments[i], initialAssignments[i]);
             }
             IntVar totalChanges = solver.makeSum(assignmentChanges).var();
-            OptimizeVar objective = solver.makeMinimize(totalChanges, 1);
 
-            // Set up the search parameters with number of workers (threads)
-            // There is no direct way to set number of threads in the CP solver in Java as in other APIs.
+            // Preference for pooling: Add soft constraints to prefer pooling trips rather than assigning them to empty vehicles
+            IntVar[] poolingPenalty = new IntVar[numTrips];
+            for (int i = 0; i < numTrips; i++) {
+                IntVar penalty = solver.makeIntVar(0, VEHICLE_CAPACITY * VEHICLE_CAPACITY, "penalty_" + i);
+
+                // Calculate the penalty based on the number of empty seats
+                for (int vehicleId : tripVehicleMap.get(subTrips.get(i).getTripId()).stream().mapToInt(v -> Integer.parseInt(v.getId().toString())).toArray()) {
+                    IntVar vehicleLoad = solver.makeIntVar(0, VEHICLE_CAPACITY, "vehicleLoad_" + i);
+                    for (int j = 0; j < numTrips; j++) {
+                        vehicleLoad = solver.makeSum(vehicleLoad, solver.makeIsEqualCstVar(vehicleAssignments[j], vehicleId)).var();
+                    }
+                    IntVar emptySeats = solver.makeDifference(VEHICLE_CAPACITY, vehicleLoad).var();
+                    penalty = solver.makeSum(penalty, solver.makeProd(emptySeats, emptySeats)).var(); // Penalize more for more empty seats
+                }
+                poolingPenalty[i] = penalty;
+            }
+            IntVar totalPoolingPenalty = solver.makeSum(poolingPenalty).var();
+
+            // Combine the objectives
+            IntVar combinedObjective = solver.makeSum(totalChanges, totalPoolingPenalty).var();
+            OptimizeVar objective = solver.makeMinimize(combinedObjective, 1);
+
+            // Set up the search parameters with the number of workers (threads)
+            // There is no direct way to set the number of threads in the CP solver in Java as in other APIs.
             // But OR-Tools generally respects the system's thread settings, you can try using environment variables.
 
             // Solve the problem
@@ -1338,7 +1359,7 @@ public class GeneticAlgorithm {
             if (solver != null) {
                 solver = null;  // Ensure the solver is closed properly
             }
-            // Suggest the JVM to run garbage collection
+            // Suggest the JVM run garbage collection
             System.gc();
             System.runFinalization();
         }
