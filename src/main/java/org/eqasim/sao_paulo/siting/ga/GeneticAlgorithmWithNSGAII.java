@@ -1,6 +1,5 @@
 package org.eqasim.sao_paulo.siting.ga;
 
-import org.apache.commons.lang3.tuple.Pair;
 import org.eqasim.sao_paulo.siting.Utils.*;
 import org.matsim.api.core.v01.Id;
 import org.matsim.contrib.dvrp.fleet.DvrpVehicle;
@@ -13,7 +12,6 @@ import org.uma.jmetal.algorithm.multiobjective.nsgaii.NSGAIIBuilder;
 import org.uma.jmetal.operator.crossover.CrossoverOperator;
 import org.uma.jmetal.operator.crossover.impl.PMXCrossover;
 import org.uma.jmetal.operator.mutation.MutationOperator;
-import org.uma.jmetal.operator.mutation.impl.PermutationSwapMutation;
 import org.uma.jmetal.operator.selection.SelectionOperator;
 import org.uma.jmetal.operator.selection.impl.BinaryTournamentSelection;
 import org.uma.jmetal.problem.permutationproblem.PermutationProblem;
