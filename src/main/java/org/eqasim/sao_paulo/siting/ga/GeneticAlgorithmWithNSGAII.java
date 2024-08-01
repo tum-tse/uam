@@ -49,6 +49,9 @@ public class GeneticAlgorithmWithNSGAII {
 
     private static final int VEHICLE_CAPACITY = 4;
 
+    private static final double SEARCH_RADIUS_ORIGIN = 1500; // search radius for origin station
+    private static final double SEARCH_RADIUS_DESTINATION = 1500; // search radius for destination station
+
     private static List<UAMTrip> subTrips;
     private static Map<Id<UAMStation>, UAMStation> stations;
     private static Map<String, List<UAMVehicle>> tripVehicleMap;
@@ -81,7 +84,7 @@ public class GeneticAlgorithmWithNSGAII {
 
         // Define the problem
         Problem<IntegerSolution> problem = new UAMProblem(
-                subTrips.stream().map(trip -> Pair.of(0, tripVehicleMap.get(trip.getTripId()).size() - 1)).collect(Collectors.toList()),
+                subTrips.stream().map(trip -> Pair.of(0, subTrips.size() - 1)).collect(Collectors.toList()),
                 2,
                 1
         );
@@ -250,17 +253,33 @@ public class GeneticAlgorithmWithNSGAII {
         Map<String, List<UAMVehicle>> tripVehicleMap = new HashMap<>();
         for (UAMTrip trip : subTrips) {
             for (UAMStation station : stations.values()) {
-                if (trip.calculateAccessTeleportationDistance(station) <= 1500) {
+                if (trip.calculateAccessTeleportationDistance(station) <= SEARCH_RADIUS_ORIGIN) {
                     List<UAMVehicle> vehicles = originStationVehicleMap.get(station.getId());
+                    if (vehicles == null){
+                        continue;
+                    }
                     List<UAMVehicle> existingVehicles = tripVehicleMap.getOrDefault(trip.getTripId(), new ArrayList<>());
 
+                    //add egress constraint
                     vehicles = vehicles.stream()
-                            .filter(vehicle -> trip.calculateEgressTeleportationDistance(vehicleDestinationStationMap.get(vehicle.getId())) <= 1500)
+                            .filter(vehicle -> trip.calculateEgressTeleportationDistance(vehicleDestinationStationMap.get(vehicle.getId())) <= SEARCH_RADIUS_DESTINATION)
                             .collect(Collectors.toCollection(ArrayList::new));
 
                     existingVehicles.addAll(vehicles);
+
                     tripVehicleMap.put(trip.getTripId(), existingVehicles);
-                }
+                } /*else {
+                    if (trip.calculateAccessTeleportationDistance(station)> THRESHOLD_FOR_TRIPS_LONGER_THAN){
+                        NUMBER_OF_TRIPS_LONGER_TAHN++;
+                    }
+
+                    // ----- Add a new vehicle for the trip when the access teleportation distance is longer than the search radius
+                    List<UAMVehicle> vehicleList = tripVehicleMap.getOrDefault(trip.getTripId(), new ArrayList<>());
+                    UAMVehicle vehicle = feedDataForVehicleCreation(trip, false);
+                    vehicleList.add(vehicle);
+                    tripVehicleMap.put(trip.getTripId(), vehicleList);
+                    //vehicleOccupancyMap.put(vehicle, VEHICLE_CAPACITY);
+                }*/
             }
         }
         return tripVehicleMap;
