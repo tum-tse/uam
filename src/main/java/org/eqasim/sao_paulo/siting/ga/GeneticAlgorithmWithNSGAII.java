@@ -11,14 +11,14 @@ import net.bhl.matsim.uam.infrastructure.UAMVehicleType;
 import org.apache.log4j.Logger;
 import org.uma.jmetal.algorithm.multiobjective.nsgaii.NSGAIIBuilder;
 import org.uma.jmetal.operator.crossover.CrossoverOperator;
-import org.uma.jmetal.operator.crossover.impl.IntegerSBXCrossover;
+import org.uma.jmetal.operator.crossover.impl.PMXCrossover;
 import org.uma.jmetal.operator.mutation.MutationOperator;
-import org.uma.jmetal.operator.mutation.impl.IntegerPolynomialMutation;
+import org.uma.jmetal.operator.mutation.impl.PermutationSwapMutation;
 import org.uma.jmetal.operator.selection.SelectionOperator;
 import org.uma.jmetal.operator.selection.impl.BinaryTournamentSelection;
-import org.uma.jmetal.problem.Problem;
-import org.uma.jmetal.solution.integersolution.impl.DefaultIntegerSolution;
-import org.uma.jmetal.solution.integersolution.IntegerSolution;
+import org.uma.jmetal.problem.permutationproblem.PermutationProblem;
+import org.uma.jmetal.solution.permutationsolution.PermutationSolution;
+import org.uma.jmetal.solution.permutationsolution.impl.IntegerPermutationSolution;
 import org.uma.jmetal.util.evaluator.impl.SequentialSolutionListEvaluator;
 
 import java.io.IOException;
@@ -36,8 +36,6 @@ public class GeneticAlgorithmWithNSGAII {
     private static final int POPULATION_SIZE = 100;
     private static final double CROSSOVER_PROBABILITY = 0.9;
     private static final double MUTATION_PROBABILITY = 1.0 / 50;
-    private static final double DISTRIBUTION_INDEX_FOR_CROSSOVER = 20.0;
-    private static final double DISTRIBUTION_INDEX_FOR_MUTATION = 20.0;
 
     // UAM problem parameters
     private static final long SEED = 4711;
@@ -83,27 +81,23 @@ public class GeneticAlgorithmWithNSGAII {
         tripVehicleMap = findNearbyVehiclesToTrips(subTrips);
 
         // Define the problem
-        Problem<IntegerSolution> problem = new UAMProblem(
-                subTrips.stream().map(trip -> Pair.of(0, subTrips.size() - 1)).collect(Collectors.toList()),
-                2,
-                1
-        );
+        PermutationProblem<PermutationSolution<Integer>> problem = new UAMPermutationProblem(subTrips.size(), 2);
 
         // Define the crossover operator
-        CrossoverOperator<IntegerSolution> crossover = new IntegerSBXCrossover(CROSSOVER_PROBABILITY, DISTRIBUTION_INDEX_FOR_CROSSOVER);
+        CrossoverOperator<PermutationSolution<Integer>> crossover = new PMXCrossover(CROSSOVER_PROBABILITY);
 
         // Define the mutation operator
-        MutationOperator<IntegerSolution> mutation = new IntegerPolynomialMutation(MUTATION_PROBABILITY, DISTRIBUTION_INDEX_FOR_MUTATION);
+        MutationOperator<PermutationSolution<Integer>> mutation = new PermutationSwapMutation<>(MUTATION_PROBABILITY);
 
         // Define the selection operator
-        SelectionOperator<List<IntegerSolution>, IntegerSolution> selection = new BinaryTournamentSelection<>();
+        SelectionOperator<List<PermutationSolution<Integer>>, PermutationSolution<Integer>> selection = new BinaryTournamentSelection<>();
 
         // Create the NSGA-II algorithm
-        NSGAIIBuilder<IntegerSolution> builder = new NSGAIIBuilder<>(problem, crossover, mutation, POPULATION_SIZE);
+        NSGAIIBuilder<PermutationSolution<Integer>> builder = new NSGAIIBuilder<>(problem, crossover, mutation, POPULATION_SIZE);
         builder.setSelectionOperator(selection);
         builder.setSolutionListEvaluator(new SequentialSolutionListEvaluator<>());
         builder.setMaxEvaluations(MAX_EVALUATIONS);
-        builder.setOffspringPopulationSize(POPULATION_SIZE); //.setPopulationSize(POPULATION_SIZE);
+        builder.setOffspringPopulationSize(POPULATION_SIZE);
 
         var algorithm = builder.build();
 
@@ -111,34 +105,31 @@ public class GeneticAlgorithmWithNSGAII {
         algorithm.run();
 
         // Get the result
-        List<IntegerSolution> result = algorithm.getResult();
+        List<PermutationSolution<Integer>> result = algorithm.getResult();
 
         // Print the Pareto front
-        for (IntegerSolution solution : result) {
+        for (PermutationSolution<Integer> solution : result) {
             System.out.println("Solution: " + solution.getObjective(0) + ", " + solution.getObjective(1));
         }
     }
 
-    public static class UAMProblem extends DefaultIntegerSolution implements Problem<IntegerSolution> {
-        /**
-         * Constructor
-         *
-         * @param bounds
-         * @param numberOfObjectives
-         * @param numberOfConstraints
-         */
-        public UAMProblem(List<Pair<Integer, Integer>> bounds, int numberOfObjectives, int numberOfConstraints) {
-            super(bounds, numberOfObjectives, numberOfConstraints);
+    public static class UAMPermutationProblem implements PermutationProblem<PermutationSolution<Integer>> {
+        private final int numberOfVariables;
+        private final int numberOfObjectives;
+
+        public UAMPermutationProblem(int numberOfVariables, int numberOfObjectives) {
+            this.numberOfVariables = numberOfVariables;
+            this.numberOfObjectives = numberOfObjectives;
         }
 
         @Override
         public int getNumberOfVariables() {
-            return subTrips.size();
+            return numberOfVariables;
         }
 
         @Override
         public int getNumberOfObjectives() {
-            return 2;
+            return numberOfObjectives;
         }
 
         @Override
@@ -148,20 +139,27 @@ public class GeneticAlgorithmWithNSGAII {
 
         @Override
         public String getName() {
-            return "UAM Problem";
+            return "UAMPermutationProblem";
         }
 
         @Override
-        public IntegerSolution createSolution() {
-            IntegerSolution solution = new DefaultIntegerSolution(this);
-            for (int i = 0; i < getNumberOfVariables(); i++) {
-                solution.setVariable(i, rand.nextInt(50));
+        public PermutationSolution<Integer> createSolution() {
+            List<Integer> permutation = new ArrayList<>();
+            for (int i = 0; i < numberOfVariables; i++) {
+                permutation.add(i);
             }
+            Collections.shuffle(permutation);
+
+            PermutationSolution<Integer> solution = new IntegerPermutationSolution(getLength(), numberOfObjectives);
+            for (int i = 0; i < numberOfVariables; i++) {
+                solution.setVariable(i, permutation.get(i));
+            }
+
             return solution;
         }
 
         @Override
-        public void evaluate(IntegerSolution solution) {
+        public void evaluate(PermutationSolution<Integer> solution) {
             int[] individual = new int[getNumberOfVariables()];
             for (int i = 0; i < getNumberOfVariables(); i++) {
                 individual[i] = solution.getVariable(i);
@@ -232,6 +230,11 @@ public class GeneticAlgorithmWithNSGAII {
 
             return totalAdditionalTravelTime;
         }
+
+        @Override
+        public int getLength() {
+            return numberOfVariables;
+        }
     }
 
     // Other helper methods for UAM problem
@@ -268,18 +271,7 @@ public class GeneticAlgorithmWithNSGAII {
                     existingVehicles.addAll(vehicles);
 
                     tripVehicleMap.put(trip.getTripId(), existingVehicles);
-                } /*else {
-                    if (trip.calculateAccessTeleportationDistance(station)> THRESHOLD_FOR_TRIPS_LONGER_THAN){
-                        NUMBER_OF_TRIPS_LONGER_TAHN++;
-                    }
-
-                    // ----- Add a new vehicle for the trip when the access teleportation distance is longer than the search radius
-                    List<UAMVehicle> vehicleList = tripVehicleMap.getOrDefault(trip.getTripId(), new ArrayList<>());
-                    UAMVehicle vehicle = feedDataForVehicleCreation(trip, false);
-                    vehicleList.add(vehicle);
-                    tripVehicleMap.put(trip.getTripId(), vehicleList);
-                    //vehicleOccupancyMap.put(vehicle, VEHICLE_CAPACITY);
-                }*/
+                }
             }
         }
         return tripVehicleMap;
