@@ -36,6 +36,7 @@ public class GeneticAlgorithmWithNSGAII {
     private static final int POPULATION_SIZE = 100;
     private static final double CROSSOVER_PROBABILITY = 0.9;
     private static final double MUTATION_PROBABILITY = 1.0 / 50;
+    private static final int VALUE_FOR_NO_VEHICLE_AVAILABLE = -1;
 
     // UAM problem parameters
     private static final long SEED = 4711;
@@ -87,7 +88,7 @@ public class GeneticAlgorithmWithNSGAII {
         CrossoverOperator<PermutationSolution<Integer>> crossover = new PMXCrossover(CROSSOVER_PROBABILITY);
 
         // Define the mutation operator
-        MutationOperator<PermutationSolution<Integer>> mutation = new PermutationSwapMutation<>(MUTATION_PROBABILITY);
+        MutationOperator<PermutationSolution<Integer>> mutation = new CustomPermutationSwapMutation(MUTATION_PROBABILITY);
 
         // Define the selection operator
         SelectionOperator<List<PermutationSolution<Integer>>, PermutationSolution<Integer>> selection = new BinaryTournamentSelection<>();
@@ -116,10 +117,12 @@ public class GeneticAlgorithmWithNSGAII {
     public static class UAMPermutationProblem implements PermutationProblem<PermutationSolution<Integer>> {
         private final int numberOfVariables;
         private final int numberOfObjectives;
+        private final int numberOfConstraints; // Added this line
 
         public UAMPermutationProblem(int numberOfVariables, int numberOfObjectives) {
             this.numberOfVariables = numberOfVariables;
             this.numberOfObjectives = numberOfObjectives;
+            this.numberOfConstraints = 1; // Set the number of constraints here
         }
 
         @Override
@@ -134,7 +137,7 @@ public class GeneticAlgorithmWithNSGAII {
 
         @Override
         public int getNumberOfConstraints() {
-            return 1;
+            return numberOfConstraints; // Added this line
         }
 
         @Override
@@ -144,17 +147,10 @@ public class GeneticAlgorithmWithNSGAII {
 
         @Override
         public PermutationSolution<Integer> createSolution() {
-            List<Integer> permutation = new ArrayList<>();
+            PermutationSolution<Integer> solution = new IntegerPermutationSolution(numberOfVariables, numberOfObjectives); // Initialize with number of constraints
             for (int i = 0; i < numberOfVariables; i++) {
-                permutation.add(i);
+                assignAvailableVehicle(i, solution);
             }
-            Collections.shuffle(permutation);
-
-            PermutationSolution<Integer> solution = new IntegerPermutationSolution(getLength(), numberOfObjectives);
-            for (int i = 0; i < numberOfVariables; i++) {
-                solution.setVariable(i, permutation.get(i));
-            }
-
             return solution;
         }
 
@@ -170,8 +166,12 @@ public class GeneticAlgorithmWithNSGAII {
             solution.setObjective(1, objectives[1]);
 
             double penalty = computePenalty(individual);
-            solution.setConstraint(0, penalty);
+            if (solution.getNumberOfConstraints() > 0) {
+                solution.setConstraint(0, penalty); // Ensure constraints are set properly
+            }
         }
+
+        // Rest of the UAMPermutationProblem class remains unchanged
 
         private double[] calculateObjectives(int[] individual) {
             double savedFlightDistance = computeSavedFlightDistance(individual);
@@ -257,6 +257,71 @@ public class GeneticAlgorithmWithNSGAII {
         }
     }
 
+    public static class CustomPermutationSwapMutation implements MutationOperator<PermutationSolution<Integer>> {
+        private final double mutationProbability;
+
+        public CustomPermutationSwapMutation(double mutationProbability) {
+            this.mutationProbability = mutationProbability;
+        }
+
+        @Override
+        public PermutationSolution<Integer> execute(PermutationSolution<Integer> solution) {
+            if (solution == null) {
+                throw new IllegalArgumentException("Null parameter");
+            }
+
+            doMutation(mutationProbability, solution);
+            return solution;
+        }
+
+        private void doMutation(double probability, PermutationSolution<Integer> solution) {
+            for (int i = 0; i < solution.getNumberOfVariables(); i++) {
+                if (rand.nextDouble() <= probability) {
+                    assignAvailableVehicle(i, solution);
+                }
+            }
+        }
+
+        @Override
+        public double getMutationProbability() {
+            return mutationProbability;
+        }
+    }
+
+    private static void assignAvailableVehicle(int i, Object individual) {
+        UAMTrip trip = subTrips.get(i);
+        List<UAMVehicle> vehicleList = tripVehicleMap.get(trip.getTripId());
+
+        synchronized (tripVehicleMap) {
+            // Add a new vehicle for the trip when there is no available vehicle
+            if (vehicleList == null || vehicleList.isEmpty()) {
+                if (vehicleList == null) {
+                    vehicleList = new ArrayList<>();
+                }
+                UAMVehicle vehicle = feedDataForVehicleCreation(trip, false);
+                vehicleList.add(vehicle);
+                tripVehicleMap.put(trip.getTripId(), vehicleList);
+            }
+        }
+
+        if (!vehicleList.isEmpty()) {
+            int vehicleIndex = rand.nextInt(vehicleList.size());
+            UAMVehicle selectedVehicle = vehicleList.get(vehicleIndex);
+            if (individual instanceof int[]) {
+                ((int[]) individual)[i] = Integer.parseInt(selectedVehicle.getId().toString());
+            } else if (individual instanceof PermutationSolution) {
+                ((PermutationSolution<Integer>) individual).setVariable(i, Integer.parseInt(selectedVehicle.getId().toString()));
+            }
+        } else {
+            if (individual instanceof int[]) {
+                ((int[]) individual)[i] = VALUE_FOR_NO_VEHICLE_AVAILABLE;
+            } else if (individual instanceof PermutationSolution) {
+                ((PermutationSolution<Integer>) individual).setVariable(i, VALUE_FOR_NO_VEHICLE_AVAILABLE);
+            }
+            throw new IllegalArgumentException("Need to handle the case when there is no available vehicle for the trip.");
+        }
+    }
+
     // Other helper methods for UAM problem
 
     private static UAMStation findNearestStation(UAMTrip trip, Map<Id<UAMStation>, UAMStation> stations, boolean accessLeg) {
@@ -278,12 +343,12 @@ public class GeneticAlgorithmWithNSGAII {
             for (UAMStation station : stations.values()) {
                 if (trip.calculateAccessTeleportationDistance(station) <= SEARCH_RADIUS_ORIGIN) {
                     List<UAMVehicle> vehicles = originStationVehicleMap.get(station.getId());
-                    if (vehicles == null){
+                    if (vehicles == null) {
                         continue;
                     }
                     List<UAMVehicle> existingVehicles = tripVehicleMap.getOrDefault(trip.getTripId(), new ArrayList<>());
 
-                    //add egress constraint
+                    // add egress constraint
                     vehicles = vehicles.stream()
                             .filter(vehicle -> trip.calculateEgressTeleportationDistance(vehicleDestinationStationMap.get(vehicle.getId())) <= SEARCH_RADIUS_DESTINATION)
                             .collect(Collectors.toCollection(ArrayList::new));
@@ -296,18 +361,55 @@ public class GeneticAlgorithmWithNSGAII {
         }
         return tripVehicleMap;
     }
-
     private static void saveStationVehicleNumber(List<UAMTrip> subTrips) {
-        for (UAMTrip subTrip : subTrips) {
-            UAMStation nearestOriginStation = findNearestStation(subTrip, stations, true);
-            UAMStation nearestDestinationStation = findNearestStation(subTrip, stations, false);
 
-            UAMVehicle vehicle = createVehicle(nearestOriginStation);
-            vehicleOriginStationMap.put(vehicle.getId(), nearestOriginStation);
-            vehicleDestinationStationMap.put(vehicle.getId(), nearestDestinationStation);
+/*        // Loop through the stations so that we can assign at least 1 to each station before we assign more vehicles based on the demand
+        for (UAMStation station : stations.values()) {
+            UAMVehicle vehicle = createVehicle(station, vehicleTypes.get(vehicleTypeId));
+
+            // Get the station ID
+            Id<UAMStation> stationId = station.getId();
+            // Check if there is already a list for this station ID, if not, create one
+            List<UAMVehicle> vehiclesAtStation = originStationVehicleMap.computeIfAbsent(stationId, k -> new ArrayList<>());
+            // Add the new vehicle to the list
+            vehiclesAtStation.add(vehicle);
+            vehicles.put(vehicle.getId(), vehicle);
+            vehicleOriginStationMap.put(vehicle.getId(), station);
+            vehicleDestinationStationMap.put(vehicle.getId(), ?);
+            originStationVehicleMap.put(stationId, vehiclesAtStation);
+        }*/
+
+        // save the station's vehicle number for the current time based on the UAMTrips' origin station
+        for (UAMTrip subTrip : subTrips) {
+            feedDataForVehicleCreation(subTrip, true);
         }
     }
+    private static UAMVehicle feedDataForVehicleCreation(UAMTrip subTrip, boolean isAddingVehicleBeforeInitialization) {
+        UAMStation nearestOriginStation = findNearestStation(subTrip, stations, true);
+        UAMStation nearestDestinationStation = findNearestStation(subTrip, stations, false);
 
+        if (nearestOriginStation == null || nearestDestinationStation == null) {
+            log.error("Found null station for trip: " + subTrip.getTripId());
+        }
+
+        UAMVehicle vehicle = createVehicle(nearestOriginStation);
+
+        //vehicles.put(vehicle.getId(), vehicle);
+        vehicleOriginStationMap.put(vehicle.getId(), nearestOriginStation);
+        vehicleDestinationStationMap.put(vehicle.getId(), nearestDestinationStation);
+        //vehicleOccupancyMap.put(vehicle, VEHICLE_CAPACITY);
+
+        if (isAddingVehicleBeforeInitialization){
+            // Get the station ID
+            Id<UAMStation> nearestOriginStationId = nearestOriginStation.getId();
+            // Check if there is already a list for this station ID, if not, create one
+            List<UAMVehicle> vehiclesAtStation = originStationVehicleMap.computeIfAbsent(nearestOriginStationId, k -> new ArrayList<>());
+            // Add the new vehicle to the list
+            vehiclesAtStation.add(vehicle);
+            originStationVehicleMap.put(nearestOriginStationId, vehiclesAtStation);
+        }
+        return vehicle;
+    }
     private static UAMVehicle createVehicle(UAMStation uamStation) {
         Id<UAMVehicleType> vehicleTypeId = Id.create("poolingVehicle", UAMVehicleType.class);
         UAMVehicleType vehicleType = new UAMVehicleType(vehicleTypeId, 0, 0, 0, 0, 0, 0, 0);
