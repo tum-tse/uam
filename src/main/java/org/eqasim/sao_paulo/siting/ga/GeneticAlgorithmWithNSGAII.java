@@ -168,6 +168,9 @@ public class GeneticAlgorithmWithNSGAII {
             double[] objectives = calculateObjectives(individual);
             solution.setObjective(0, objectives[0]);
             solution.setObjective(1, objectives[1]);
+
+            double penalty = computePenalty(individual);
+            solution.setConstraint(0, penalty);
         }
 
         private double[] calculateObjectives(int[] individual) {
@@ -229,6 +232,23 @@ public class GeneticAlgorithmWithNSGAII {
             }
 
             return totalAdditionalTravelTime;
+        }
+
+        private double computePenalty(int[] individual) {
+            double penalty = 0.0;
+            Map<Integer, Integer> vehicleLoad = new HashMap<>();
+
+            for (int vehicleId : individual) {
+                vehicleLoad.put(vehicleId, vehicleLoad.getOrDefault(vehicleId, 0) + 1);
+            }
+
+            for (int load : vehicleLoad.values()) {
+                if (load > VEHICLE_CAPACITY) {
+                    penalty += PENALTY_FOR_VEHICLE_CAPACITY_VIOLATION * (load - VEHICLE_CAPACITY);
+                }
+            }
+
+            return penalty;
         }
 
         @Override
