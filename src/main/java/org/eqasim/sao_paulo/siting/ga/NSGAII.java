@@ -1,31 +1,31 @@
 package org.eqasim.sao_paulo.siting.ga;
 
-        import org.eqasim.sao_paulo.siting.Utils.*;
+import org.eqasim.sao_paulo.siting.Utils.*;
 
-        import org.matsim.api.core.v01.Id;
-        import org.matsim.contrib.dvrp.fleet.DvrpVehicle;
-        import org.matsim.contrib.dvrp.fleet.ImmutableDvrpVehicleSpecification;
-        import net.bhl.matsim.uam.infrastructure.UAMStation;
-        import net.bhl.matsim.uam.infrastructure.UAMVehicle;
-        import net.bhl.matsim.uam.infrastructure.UAMVehicleType;
+import org.matsim.api.core.v01.Id;
+import org.matsim.contrib.dvrp.fleet.DvrpVehicle;
+import org.matsim.contrib.dvrp.fleet.ImmutableDvrpVehicleSpecification;
+import net.bhl.matsim.uam.infrastructure.UAMStation;
+import net.bhl.matsim.uam.infrastructure.UAMVehicle;
+import net.bhl.matsim.uam.infrastructure.UAMVehicleType;
 
-        import org.apache.log4j.Logger;
-        import com.google.ortools.Loader;
-        import com.google.ortools.sat.*;
-        import com.google.ortools.constraintsolver.*;
-        import com.google.ortools.constraintsolver.IntVar;
-        import com.google.ortools.util.Domain;
+import org.apache.log4j.Logger;
+import com.google.ortools.Loader;
+import com.google.ortools.sat.*;
+import com.google.ortools.constraintsolver.*;
+import com.google.ortools.constraintsolver.IntVar;
+import com.google.ortools.util.Domain;
 
-        import java.io.IOException;
-        import java.util.*;
-        import java.util.concurrent.*;
-        import java.util.stream.Collectors;
-        import java.nio.file.Files;
-        import java.nio.file.Paths;
-        import java.io.FileWriter;
-        import java.util.stream.Stream;
-        import java.util.concurrent.ConcurrentHashMap;
-        import java.util.concurrent.Callable;
+import java.io.IOException;
+import java.util.*;
+import java.util.concurrent.*;
+import java.util.stream.Collectors;
+import java.nio.file.Files;
+import java.nio.file.Paths;
+import java.io.FileWriter;
+import java.util.stream.Stream;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.Callable;
 
 public class NSGAII {
     private static final Logger log = Logger.getLogger(NSGAII.class);
