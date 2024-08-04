@@ -24,8 +24,8 @@ import java.io.FileWriter;
 import java.util.stream.Stream;
 import java.util.concurrent.ConcurrentHashMap;
 
-public class NSGAII {
-    private static final Logger log = Logger.getLogger(NSGAII.class);
+public class MultiObjectiveNSGAII {
+    private static final Logger log = Logger.getLogger(MultiObjectiveNSGAII.class);
 
     // Genetic Algorithm parameters ====================================================================================
     private static final int MAX_GENERATIONS = 100; // Max number of generations
@@ -80,8 +80,8 @@ public class NSGAII {
     //private static final Map<UAMVehicle, Integer> vehicleOccupancyMap = new HashMap<>();
 
     // Data container for outputs
-    private static final PriorityQueue<SolutionFitnessPair> solutionsHeap = new PriorityQueue<>(Comparator.comparingDouble(SolutionFitnessPair::getFitness));
-    private static final PriorityQueue<SolutionFitnessPair> repairedSolutionsHeap = new PriorityQueue<>(Comparator.comparingDouble(SolutionFitnessPair::getFitness));
+    private static final PriorityQueue<SolutionFitnessPair> solutionsHeap = new PriorityQueue<>(Comparator.comparingDouble(p -> p.getFitness()[0])); // Modify comparator to use first fitness objective
+    private static final PriorityQueue<SolutionFitnessPair> repairedSolutionsHeap = new PriorityQueue<>(Comparator.comparingDouble(p -> p.getFitness()[0])); // Modify comparator to use first fitness objective
     private static final Map<String, Double> finalSolutionTravelTimeChanges = new HashMap<>(); // Additional field to store travel time change of each trip for the final best feasible solution
     private static final Map<String, Double> finalSolutionFlightDistanceChanges = new HashMap<>(); // Additional field to store saved flight distance of each trip for the final best feasible solution
     private static final Map<String, Double> finalSolutionDepartureRedirectionRate = new HashMap<>(); // Additional field to store redirection rate of each trip for the final best feasible solution
@@ -125,14 +125,14 @@ public class NSGAII {
         List<SolutionFitnessPair> population = initializePopulation();
         for (int gen = 0; gen < MAX_GENERATIONS; gen++) {
             population = evolvePopulation(population, gen);
-            System.out.println("Generation " + gen + ": Best fitness = " + population.get(0).getFitness());
+            System.out.println("Generation " + gen + ": Best fitness = " + Arrays.toString(population.get(0).getFitness()));
         }
 
         // Find the best feasible solution at the end of GA execution without altering the original solutions heap
         SolutionFitnessPair bestFeasibleSolutionFitnessPair = findBestFeasibleSolution(population);
         int[] bestFeasibleSolution = bestFeasibleSolutionFitnessPair.getSolution();
         System.out.println("Best feasible solution: " + Arrays.toString(bestFeasibleSolution));
-        System.out.println("The fitness of the best feasible solution: " + bestFeasibleSolutionFitnessPair.getFitness());
+        System.out.println("The fitness of the best feasible solution: " + Arrays.toString(bestFeasibleSolutionFitnessPair.getFitness()));
 
         // Calculate and print the performance indicators
         calculateFitness(bestFeasibleSolution, true);
@@ -158,7 +158,7 @@ public class NSGAII {
             }
 
             child = mutate(child); // Mutation is always applied
-            double fitness = calculateFitness(child, false);
+            double[] fitness = calculateFitness(child, false);
             newPop.add(new SolutionFitnessPair(child, fitness));
         }
 
@@ -173,7 +173,7 @@ public class NSGAII {
                 nextGeneration.addAll(front);
             } else {
                 front.sort(Comparator.comparingInt(SolutionFitnessPair::getRank)
-                        .thenComparingDouble(SolutionFitnessPair::getCrowdingDistance).reversed());
+                        .thenComparingDouble(p -> p.getCrowdingDistance()).reversed());
                 nextGeneration.addAll(front.subList(0, POP_SIZE - nextGeneration.size()));
                 break;
             }
@@ -184,9 +184,9 @@ public class NSGAII {
     // Initialize population with random assignments
     private static List<SolutionFitnessPair> initializePopulation() {
         List<SolutionFitnessPair> population = new ArrayList<>();
-        for (int i = 0; i < NSGAII.POP_SIZE; i++) {
+        for (int i = 0; i < MultiObjectiveNSGAII.POP_SIZE; i++) {
             int[] individual = generateIndividual();
-            double fitness = calculateFitness(individual, false);
+            double[] fitness = calculateFitness(individual, false);
             population.add(new SolutionFitnessPair(individual, fitness));
         }
         return population;
@@ -210,7 +210,7 @@ public class NSGAII {
             tournament.add(population.get(rand.nextInt(population.size())));
         }
         tournament.sort(Comparator.comparingInt(SolutionFitnessPair::getRank)
-                .thenComparingDouble(SolutionFitnessPair::getCrowdingDistance).reversed()); // Sort by rank and then by crowding distance
+                .thenComparingDouble(p -> p.getCrowdingDistance()).reversed()); // Sort by rank and then by crowding distance
         return tournament.get(0).getSolution();
     }
 
@@ -293,8 +293,8 @@ public class NSGAII {
 
     // Objective function ==============================================================================================
     // Calculate fitness for an individual
-    private static double calculateFitness(int[] individual, boolean isFinalBestFeasibleSolution) {
-        double fitness = 0.0;
+    private static double[] calculateFitness(int[] individual, boolean isFinalBestFeasibleSolution) {
+
         Map<Integer, List<UAMTrip>> vehicleAssignments = new HashMap<>();
 
         // Organize trips by assigned vehicle
@@ -317,11 +317,14 @@ public class NSGAII {
             System.out.println("Pooling rate: " + poolingRate);
         }
 
-        fitness = getFitnessPerVehicle(isFinalBestFeasibleSolution, vehicleAssignments, fitness);
-
-        return fitness;
+        return getFitnessPerVehicle(isFinalBestFeasibleSolution, vehicleAssignments);
     }
-    private static double getFitnessPerVehicle(boolean isFinalBestFeasibleSolution, Map<Integer, List<UAMTrip>> vehicleAssignments, double fitness) {
+    private static double[] getFitnessPerVehicle(boolean isFinalBestFeasibleSolution, Map<Integer, List<UAMTrip>> vehicleAssignments) {
+        double totalFitness = 0.0;
+        double totalDistanceChange = 0.0;
+        double totalTimeChange = 0.0;
+        double totalViolationPenalty = 0.0;
+
         // Calculate fitness per vehicle
         for (Map.Entry<Integer, List<UAMTrip>> entry : vehicleAssignments.entrySet()) {
             List<UAMTrip> trips = entry.getValue();
@@ -332,7 +335,7 @@ public class NSGAII {
             if (trips.isEmpty()) continue;
             if (trips.size() == 1){
                 UAMTrip trip = trips.get(0);
-                fitness = getFitnessForNonPooledOrBaseTrip(trip, originStationOfVehicle, destinationStationOfVehicle, fitness, isFinalBestFeasibleSolution);
+                totalFitness = getFitnessForNonPooledOrBaseTrip(trip, originStationOfVehicle, destinationStationOfVehicle, totalFitness, isFinalBestFeasibleSolution);
                 continue;
             }
 
@@ -350,7 +353,7 @@ public class NSGAII {
             // Calculate fitness based on the proposed pooling option
             for (UAMTrip trip : trips) {
                 if(trip.getTripId().equals(baseTrip.getTripId())){
-                    fitness = getFitnessForNonPooledOrBaseTrip(trip, originStationOfVehicle, destinationStationOfVehicle, fitness, isFinalBestFeasibleSolution);
+                    totalFitness = getFitnessForNonPooledOrBaseTrip(trip, originStationOfVehicle, destinationStationOfVehicle, totalFitness, isFinalBestFeasibleSolution);
                     continue;
                 }
 
@@ -360,30 +363,30 @@ public class NSGAII {
 
                 // calculate change in flight distance
                 double flightDistanceChange = getFlightDistanceChange(trip, originStationOfVehicle, destinationStationOfVehicle);
-                fitness += ALPHA * flightDistanceChange;
+                totalFitness += ALPHA * flightDistanceChange;
                 tripFlightDistanceChange += flightDistanceChange;
                 // calculate saved flight distance
                 double savedFlightDistance = trip.calculateFlightDistance(trip.getOriginStation(), trip.getDestinationStation());
-                fitness += ALPHA * (-1) * savedFlightDistance;
+                totalFitness += ALPHA * (-1) * savedFlightDistance;
                 tripFlightDistanceChange += savedFlightDistance;
                 if(isFinalBestFeasibleSolution){
                     finalSolutionFlightDistanceChanges.put(trip.getTripId(), tripFlightDistanceChange);
                 }
                 // calculate change in flight time due to the change in flight distance
                 double flightTimeChange = flightDistanceChange / VEHICLE_CRUISE_SPEED;
-                fitness += BETA * flightTimeChange;
+                totalFitness += BETA * flightTimeChange;
                 tripTimeChange += flightTimeChange;
                 // calculate additional travel time
                 double originalArrivalTimeForThePooledTrip = trip.getDepartureTime() + trip.calculateAccessTeleportationTime(trip.getOriginStation());
                 double travelTimeChangeDueToAccessMatching = boardingTimeForAllTrips - originalArrivalTimeForThePooledTrip;
                 tripTimeChange += travelTimeChangeDueToAccessMatching;
                 if(travelTimeChangeDueToAccessMatching > 0) {
-                    fitness += BETA * travelTimeChangeDueToAccessMatching;
+                    totalFitness += BETA * travelTimeChangeDueToAccessMatching;
                 } else {
-                    fitness += BETA * (- travelTimeChangeDueToAccessMatching); //TODO: reconsider for "negative additional travel time" cases
+                    totalFitness += BETA * (- travelTimeChangeDueToAccessMatching); //TODO: reconsider for "negative additional travel time" cases
                 }
                 double additionalTravelTimeDueToEgressMatching = getTravelTimeChangeDueToEgressMatching(trip, destinationStationOfVehicle);
-                fitness += BETA * additionalTravelTimeDueToEgressMatching;
+                totalFitness += BETA * additionalTravelTimeDueToEgressMatching;
                 tripTimeChange += additionalTravelTimeDueToEgressMatching;
                 if(isFinalBestFeasibleSolution){
                     finalSolutionTravelTimeChanges.put(trip.getTripId(), tripTimeChange);
@@ -404,40 +407,42 @@ public class NSGAII {
                     // assigned destination station
                     finalSolutionAssignedEgressStation.put(trip.getTripId(), destinationStationOfVehicle.getId().toString());
                 }
+                totalDistanceChange += tripFlightDistanceChange;
+                totalTimeChange += tripTimeChange;
             }
             //add penalty for the case when vehicle capacity is violated
             if(trips.size()>VEHICLE_CAPACITY){
-                fitness += PENALTY_FOR_VEHICLE_CAPACITY_VIOLATION * (trips.size()-VEHICLE_CAPACITY);
+                totalViolationPenalty += PENALTY_FOR_VEHICLE_CAPACITY_VIOLATION * (trips.size()-VEHICLE_CAPACITY);
             }
         }
-        return fitness;
+        return new double[]{totalFitness, totalDistanceChange, totalTimeChange, totalViolationPenalty};
     }
-    private static double getFitnessForNonPooledOrBaseTrip(UAMTrip trip, UAMStation originStationOfVehicle, UAMStation destinationStationOfVehicle, double fitness, boolean isFinalBestFeasibleSolution) {
+    private static double getFitnessForNonPooledOrBaseTrip(UAMTrip trip, UAMStation originStationOfVehicle, UAMStation destinationStationOfVehicle, double totalFitness, boolean isFinalBestFeasibleSolution) {
         double tripTimeChange = 0.0;
         double tripFlightDistanceChange = 0.0;
 
         // calculate change in flight distance
         double flightDistanceChange = getFlightDistanceChange(trip, originStationOfVehicle, destinationStationOfVehicle);
-        fitness += ALPHA * flightDistanceChange;
+        totalFitness += ALPHA * flightDistanceChange;
         tripFlightDistanceChange += flightDistanceChange;
         if(isFinalBestFeasibleSolution){
             finalSolutionFlightDistanceChanges.put(trip.getTripId(), tripFlightDistanceChange);
         }
         // calculate change in flight time due to the change in flight distance
         double flightTimeChange = flightDistanceChange / VEHICLE_CRUISE_SPEED;
-        fitness += BETA * flightTimeChange;
+        totalFitness += BETA * flightTimeChange;
         tripTimeChange += flightTimeChange;
         // calculate change in travel time due to access matching
         double travelTimeChangeDueToAccessMatching = trip.calculateAccessTeleportationTime(originStationOfVehicle) - trip.calculateAccessTeleportationTime(trip.getOriginStation());
         tripTimeChange += travelTimeChangeDueToAccessMatching;
         if(travelTimeChangeDueToAccessMatching > 0) {
-            fitness += BETA * travelTimeChangeDueToAccessMatching;
+            totalFitness += BETA * travelTimeChangeDueToAccessMatching;
         } else {
-            fitness += BETA * (- travelTimeChangeDueToAccessMatching);
+            totalFitness += BETA * (- travelTimeChangeDueToAccessMatching);
         }
         // calculate change in travel time due to egress matching
         double travelTimeChangeDueToEgressMatching = getTravelTimeChangeDueToEgressMatching(trip, destinationStationOfVehicle);
-        fitness += BETA * travelTimeChangeDueToEgressMatching;
+        totalFitness += BETA * travelTimeChangeDueToEgressMatching;
         tripTimeChange += travelTimeChangeDueToEgressMatching;
         if(isFinalBestFeasibleSolution){
             finalSolutionTravelTimeChanges.put(trip.getTripId(), tripTimeChange);
@@ -457,7 +462,7 @@ public class NSGAII {
             // assigned destination station
             finalSolutionAssignedEgressStation.put(trip.getTripId(), destinationStationOfVehicle.getId().toString());
         }
-        return fitness;
+        return totalFitness;
     }
     private static double getFlightDistanceChange(UAMTrip trip, UAMStation originStationOfVehicle, UAMStation destinationStationOfVehicle) {
         return trip.calculateFlightDistance(originStationOfVehicle, destinationStationOfVehicle) - trip.calculateFlightDistance(trip.getOriginStation(), trip.getDestinationStation());
@@ -548,7 +553,15 @@ public class NSGAII {
     }
 
     private static boolean dominates(SolutionFitnessPair p, SolutionFitnessPair q) {
-        return p.fitness > q.fitness; // Adjust for minimization or maximization
+        boolean betterInAnyObjective = false;
+        for (int i = 0; i < p.getFitness().length; i++) {
+            if (p.getFitness()[i] < q.getFitness()[i]) {
+                betterInAnyObjective = true;
+            } else if (p.getFitness()[i] > q.getFitness()[i]) {
+                return false;
+            }
+        }
+        return betterInAnyObjective;
     }
 
     private static void calculateCrowdingDistance(List<SolutionFitnessPair> front) {
@@ -559,16 +572,16 @@ public class NSGAII {
             p.crowdingDistance = 0;
         }
 
-        int m = 1; // Number of objectives; change if you have more objectives
+        int m = front.get(0).getFitness().length;
         for (int i = 0; i < m; i++) {
             final int objIndex = i;
-            front.sort(Comparator.comparingDouble(p -> p.fitness)); // Sort by the i-th objective
+            front.sort(Comparator.comparingDouble(p -> p.getFitness()[objIndex]));
             front.get(0).crowdingDistance = Double.POSITIVE_INFINITY;
             front.get(n - 1).crowdingDistance = Double.POSITIVE_INFINITY;
-            double minValue = front.get(0).fitness;
-            double maxValue = front.get(n - 1).fitness;
+            double minValue = front.get(0).getFitness()[objIndex];
+            double maxValue = front.get(n - 1).getFitness()[objIndex];
             for (int j = 1; j < n - 1; j++) {
-                front.get(j).crowdingDistance += (front.get(j + 1).fitness - front.get(j - 1).fitness) / (maxValue - minValue);
+                front.get(j).crowdingDistance += (front.get(j + 1).getFitness()[objIndex] - front.get(j - 1).getFitness()[objIndex]) / (maxValue - minValue);
             }
         }
     }
@@ -592,11 +605,11 @@ public class NSGAII {
     // SolutionFitnessPair class to hold individual solutions and their fitness
     private static class SolutionFitnessPair {
         private final int[] solution;
-        private final double fitness;
+        private final double[] fitness;
         private int rank;
         private double crowdingDistance;
 
-        public SolutionFitnessPair(int[] solution, double fitness) {
+        public SolutionFitnessPair(int[] solution, double[] fitness) {
             this.solution = solution;
             this.fitness = fitness;
             this.rank = Integer.MAX_VALUE;
@@ -607,7 +620,7 @@ public class NSGAII {
             return solution;
         }
 
-        public double getFitness() {
+        public double[] getFitness() {
             return fitness;
         }
 
@@ -624,7 +637,7 @@ public class NSGAII {
     private static SolutionFitnessPair findBestFeasibleSolution(List<SolutionFitnessPair> population) {
         // Create a new priority queue that is a copy of the original but sorted in descending order by fitness
         PriorityQueue<SolutionFitnessPair> solutionsHeapCopy = new PriorityQueue<>(
-                Comparator.comparingDouble(SolutionFitnessPair::getFitness).reversed()
+                Comparator.comparingDouble((SolutionFitnessPair p) -> p.getFitness()[0]).reversed()
         );
         solutionsHeapCopy.addAll(population);
 
@@ -903,7 +916,7 @@ public class NSGAII {
         try (Stream<String> lines = Files.lines(Paths.get(filePath))) {
             trips = lines
                     .skip(1) // Skip header line
-                    .map(NSGAII::parseTrip)
+                    .map(MultiObjectiveNSGAII::parseTrip)
                     .collect(Collectors.toList());
         } catch (IOException e) {
             e.printStackTrace();
@@ -986,7 +999,7 @@ public class NSGAII {
 
             int[] currentSolution = Arrays.copyOf(solution, solution.length);
             int[] bestSolution = Arrays.copyOf(currentSolution, currentSolution.length);
-            double bestFitness = calculateFitness(bestSolution, false);
+            double[] bestFitness = calculateFitness(bestSolution, false);
 
             while (temperature > 1) {
                 int[] newSolution = Arrays.copyOf(currentSolution, currentSolution.length);
@@ -995,14 +1008,14 @@ public class NSGAII {
                 int tripIndex = rand.nextInt(newSolution.length);
                 assignAvailableVehicle(tripIndex, newSolution);
 
-                double currentFitness = calculateFitness(currentSolution, false);
-                double newFitness = calculateFitness(newSolution, false);
+                double[] currentFitness = calculateFitness(currentSolution, false);
+                double[] newFitness = calculateFitness(newSolution, false);
 
-                if (acceptanceProbability(currentFitness, newFitness, temperature) > rand.nextDouble()) {
+                if (acceptanceProbability(currentFitness[0], newFitness[0], temperature) > rand.nextDouble()) {
                     currentSolution = Arrays.copyOf(newSolution, newSolution.length);
                 }
 
-                if (newFitness > bestFitness && isFeasible(newSolution, false)) {
+                if (newFitness[0] > bestFitness[0] && isFeasible(newSolution, false)) {
                     bestSolution = Arrays.copyOf(newSolution, newSolution.length);
                     bestFitness = newFitness;
                 }
