@@ -11,10 +11,8 @@ import net.bhl.matsim.uam.infrastructure.UAMVehicleType;
 
 import org.apache.log4j.Logger;
 import com.google.ortools.Loader;
-import com.google.ortools.sat.*;
 import com.google.ortools.constraintsolver.*;
 import com.google.ortools.constraintsolver.IntVar;
-import com.google.ortools.util.Domain;
 
 import java.io.IOException;
 import java.util.*;
@@ -25,7 +23,6 @@ import java.nio.file.Paths;
 import java.io.FileWriter;
 import java.util.stream.Stream;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.Callable;
 
 public class NSGAII {
     private static final Logger log = Logger.getLogger(NSGAII.class);
