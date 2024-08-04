@@ -125,7 +125,14 @@ public class NSGAII {
         saveStationVehicleNumber(subTrips);
         tripVehicleMap = findNearbyVehiclesToTrips(subTrips);
 
-        SolutionFitnessPair bestFeasibleSolutionFitnessPair = solveWithGA();
+        List<SolutionFitnessPair> population = initializePopulation();
+        for (int gen = 0; gen < MAX_GENERATIONS; gen++) {
+            population = evolvePopulation(population, gen);
+            System.out.println("Generation " + gen + ": Best fitness = " + population.get(0).getFitness());
+        }
+
+        // Find the best feasible solution at the end of GA execution without altering the original solutions heap
+        SolutionFitnessPair bestFeasibleSolutionFitnessPair = findBestFeasibleSolution(population);
         int[] bestFeasibleSolution = bestFeasibleSolutionFitnessPair.getSolution();
         System.out.println("Best feasible solution: " + Arrays.toString(bestFeasibleSolution));
         System.out.println("The fitness of the best feasible solution: " + bestFeasibleSolutionFitnessPair.getFitness());
@@ -138,42 +145,56 @@ public class NSGAII {
         System.out.println("Threshold for trips longer than " + THRESHOLD_FOR_TRIPS_LONGER_THAN_STRING + ": " + NUMBER_OF_TRIPS_LONGER_TAHN);
     }
 
-    // GA solver =======================================================================================================
-    private static SolutionFitnessPair solveWithGA() throws InterruptedException {
-        // Initialize population and solutions heap in the first generation
-        int[][] population = initializePopulation();
+    // GA solver with NSGA-II modifications==============================================================================
+    private static List<SolutionFitnessPair> evolvePopulation(List<SolutionFitnessPair> population, int currentGeneration) {
+        List<SolutionFitnessPair> newPop = new ArrayList<>();
 
-        // GA iterations
-        for (int gen = 0; gen < MAX_GENERATIONS; gen++) {
-            if(gen > 0){
-                population = evolvePopulation(population, gen);
+        while (newPop.size() < POP_SIZE) {
+            int[] parent1 = selectParent(population);
+            int[] parent2 = selectParent(population);
+            int[] child;
+
+            if (rand.nextDouble() < CROSSOVER_RATE) {
+                child = crossover(parent1, parent2);
+            } else {
+                child = rand.nextBoolean() ? parent1 : parent2; // Skip crossover, use parent directly
             }
-            PriorityQueue<SolutionFitnessPair> iterationHeap = updateSolutionsHeap(population);
-            System.out.println("Generation " + gen + ": Best fitness = " + iterationHeap.peek().getFitness());
+
+            child = mutate(child); // Mutation is always applied
+            double fitness = calculateFitness(child, false);
+            newPop.add(new SolutionFitnessPair(child, fitness));
         }
 
-        // Repair infeasible solutions using Simulated Annealing
-        // Executor service and queue for parallel processing
-        ExecutorService executorService = Executors.newFixedThreadPool(numProcessors);
-        ArrayBlockingQueue<SolutionFitnessPair> queue = new ArrayBlockingQueue<>(solutionsHeap.size());
-        repairInfeasibleSolutions(numProcessors, executorService, queue);
-        // Make sure that the file is not written before all threads are finished
-        while (!executorService.isTerminated())
-            Thread.sleep(200);
+        List<SolutionFitnessPair> combinedPop = new ArrayList<>(population);
+        combinedPop.addAll(newPop);
 
-        // Find the best feasible solution at the end of GA execution without altering the original solutions heap
-        SolutionFitnessPair bestFeasibleSolutionFitnessPair = findBestFeasibleSolution();
-        return bestFeasibleSolutionFitnessPair;
+        List<List<SolutionFitnessPair>> fronts = nonDominatedSort(combinedPop);
+        List<SolutionFitnessPair> nextGeneration = new ArrayList<>();
+        for (List<SolutionFitnessPair> front : fronts) {
+            calculateCrowdingDistance(front);
+            if (nextGeneration.size() + front.size() <= POP_SIZE) {
+                nextGeneration.addAll(front);
+            } else {
+                front.sort(Comparator.comparingInt(SolutionFitnessPair::getRank)
+                        .thenComparingDouble(SolutionFitnessPair::getCrowdingDistance).reversed());
+                nextGeneration.addAll(front.subList(0, POP_SIZE - nextGeneration.size()));
+                break;
+            }
+        }
+        return nextGeneration;
     }
 
     // Initialize population with random assignments
-    private static int[][] initializePopulation() {
-        int[][] population = new int[NSGAII.POP_SIZE][];
+    private static List<SolutionFitnessPair> initializePopulation() {
+        List<SolutionFitnessPair> population = new ArrayList<>();
         for (int i = 0; i < NSGAII.POP_SIZE; i++) {
-            population[i] = generateIndividual();
+            int[] individual = generateIndividual();
+            double fitness = calculateFitness(individual, false);
+            population.add(new SolutionFitnessPair(individual, fitness));
         }
         return population;
     }
+
     // Generate a random individual
     private static int[] generateIndividual() {
         int[] individual = new int[subTrips.size()];
@@ -185,54 +206,17 @@ public class NSGAII {
         return individual;
     }
 
-    // Modified evolvePopulation method
-    private static int[][] evolvePopulation(int[][] population, int currentGeneration) {
-        int[][] newPop = new int[POP_SIZE][];
-        boolean useCrossover = currentGeneration < CROSSOVER_DISABLE_AFTER;
-
-        for (int i = 0; i < POP_SIZE; i++) {
-            int[] parent1 = select(population);
-            int[] parent2 = select(population);
-            int[] child;
-
-            if (useCrossover && rand.nextDouble() < CROSSOVER_RATE) {
-                child = crossover(parent1, parent2);
-            } else {
-                child = rand.nextBoolean() ? parent1 : parent2; // Skip crossover, use parent directly
-            }
-
-            newPop[i] = mutate(child); // Mutation is always applied
-        }
-        return newPop;
-    }
-    // Selection - Tournament selection with null check
-    private static int[] select(int[][] pop) {
-        int[] best = null;
-        double bestFitness = -Double.MAX_VALUE;
-
+    // Selection - Tournament selection with rank and crowding distance
+    private static int[] selectParent(List<SolutionFitnessPair> population) {
+        List<SolutionFitnessPair> tournament = new ArrayList<>();
         for (int i = 0; i < TOURNAMENT_SIZE; i++) {
-            int[] individual = pop[rand.nextInt(POP_SIZE)];
-            double fitness = calculateFitness(individual, false);
-            if (fitness > bestFitness) {
-                best = individual;
-                bestFitness = fitness;
-            }
+            tournament.add(population.get(rand.nextInt(population.size())));
         }
-
-        //TODO: Reconsider this part
-        // Check if 'best' is null which can be due to empty population array
-        if (best == null) {
-            // Handle the scenario when no best individual was found
-            // For example: return a new random individual or handle the error
-            // Returning new random individual as a fallback:
-            best = generateIndividual();  // Assuming generateIndividual() creates a valid random individual
-
-            //throw new IllegalArgumentException("No best individual found");
-            throw new IllegalArgumentException("No best individual found");
-        }
-
-        return Arrays.copyOf(best, best.length); // Return a copy of the best individual
+        tournament.sort(Comparator.comparingInt(SolutionFitnessPair::getRank)
+                .thenComparingDouble(SolutionFitnessPair::getCrowdingDistance).reversed()); // Sort by rank and then by crowding distance
+        return tournament.get(0).getSolution();
     }
+
     //TODO: consider to repair the solution if it is not feasible due to the violation of vehicle capacity constraint
     // Crossover - Single point crossover //TODO: Implement other types of crossover instead of single point
     private static int[] crossover(int[] parent1, int[] parent2) {
@@ -247,6 +231,7 @@ public class NSGAII {
         }
         return child;
     }
+
     // Mutation - Randomly change vehicle assignment
     private static int[] mutate(int[] individual) {
         //resetVehicleCapacities(tripVehicleMap); // Reset the vehicle capacity since capacity of vehicles will be updated during each individual generation
@@ -279,8 +264,8 @@ public class NSGAII {
         //synchronize the block that checks for empty vehicle list and adds a new vehicle (i.e., vehicle has capacity) after checking the egress constraint
         synchronized (tripVehicleMap) {
             // Add a new vehicle for the trip when there is no available vehicle
-            if (vehicleList==null||vehicleList.isEmpty()) {
-                if(vehicleList==null){
+            if (vehicleList == null || vehicleList.isEmpty()) {
+                if (vehicleList == null) {
                     vehicleList = new ArrayList<>();
                 }
                 UAMVehicle vehicle = feedDataForVehicleCreation(trip, false);
@@ -484,12 +469,51 @@ public class NSGAII {
         return trip.calculateEgressTeleportationTime(destinationStationOfVehicle) - trip.calculateEgressTeleportationTime(trip.getDestinationStation());
     }
 
-    // Helper methods for GA ===========================================================================================
-    private static void resetVehicleOccupancy(Map<UAMVehicle, Integer> vehicleOccupancyMap) {
-        for (Map.Entry<UAMVehicle, Integer> entry : vehicleOccupancyMap.entrySet()) {
-            entry.setValue(VEHICLE_CAPACITY);
+    // Helper methods for GA and NSGA-II ======================================================================
+    private static List<List<SolutionFitnessPair>> nonDominatedSort(List<SolutionFitnessPair> population) {
+        List<List<SolutionFitnessPair>> fronts = new ArrayList<>();
+        Map<SolutionFitnessPair, List<SolutionFitnessPair>> dominationMap = new HashMap<>();
+        Map<SolutionFitnessPair, Integer> dominatedCount = new HashMap<>();
+
+        for (SolutionFitnessPair p : population) {
+            dominationMap.put(p, new ArrayList<>());
+            dominatedCount.put(p, 0);
+            for (SolutionFitnessPair q : population) {
+                if (dominates(p, q)) {
+                    dominationMap.get(p).add(q);
+                } else if (dominates(q, p)) {
+                    dominatedCount.put(p, dominatedCount.get(p) + 1);
+                }
+            }
+            if (dominatedCount.get(p) == 0) {
+                p.rank = 0;
+                if (fronts.isEmpty()) {
+                    fronts.add(new ArrayList<>());
+                }
+                fronts.get(0).add(p);
+            }
         }
+
+        int i = 0;
+        while (i < fronts.size() && !fronts.get(i).isEmpty()) {
+            List<SolutionFitnessPair> nextFront = new ArrayList<>();
+            for (SolutionFitnessPair p : fronts.get(i)) {
+                for (SolutionFitnessPair q : dominationMap.get(p)) {
+                    dominatedCount.put(q, dominatedCount.get(q) - 1);
+                    if (dominatedCount.get(q) == 0) {
+                        q.rank = i + 1;
+                        nextFront.add(q);
+                    }
+                }
+            }
+            if (!nextFront.isEmpty()) {
+                fronts.add(nextFront);
+            }
+            i++;
+        }
+        return fronts;
     }
+
     private static Map<String, List<UAMVehicle>> findNearbyVehiclesToTrips(List<UAMTrip> subTrips) {
         Map<String, List<UAMVehicle>> tripVehicleMap = new HashMap<>();
         for (UAMTrip trip : subTrips) {
@@ -526,15 +550,60 @@ public class NSGAII {
         return tripVehicleMap;
     }
 
+    private static boolean dominates(SolutionFitnessPair p, SolutionFitnessPair q) {
+        return p.fitness > q.fitness; // Adjust for minimization or maximization
+    }
+
+    private static void calculateCrowdingDistance(List<SolutionFitnessPair> front) {
+        int n = front.size();
+        if (n == 0) return;
+
+        for (SolutionFitnessPair p : front) {
+            p.crowdingDistance = 0;
+        }
+
+        int m = 1; // Number of objectives; change if you have more objectives
+        for (int i = 0; i < m; i++) {
+            final int objIndex = i;
+            front.sort(Comparator.comparingDouble(p -> p.fitness)); // Sort by the i-th objective
+            front.get(0).crowdingDistance = Double.POSITIVE_INFINITY;
+            front.get(n - 1).crowdingDistance = Double.POSITIVE_INFINITY;
+            double minValue = front.get(0).fitness;
+            double maxValue = front.get(n - 1).fitness;
+            for (int j = 1; j < n - 1; j++) {
+                front.get(j).crowdingDistance += (front.get(j + 1).fitness - front.get(j - 1).fitness) / (maxValue - minValue);
+            }
+        }
+    }
+
+    // Method to count the vehicles by capacity
+    private static Map<Integer, Integer> countVehicleCapacities(int[] solution) {
+        Map<Integer, Integer> vehicleLoadCount = new HashMap<>();
+        for (int vehicleId : solution) {
+            vehicleLoadCount.put(vehicleId, vehicleLoadCount.getOrDefault(vehicleId, 0) + 1);
+        }
+
+        Map<Integer, Integer> capacityCount = new HashMap<>();
+        for (int load : vehicleLoadCount.values()) {
+            capacityCount.put(load, capacityCount.getOrDefault(load, 0) + 1);
+        }
+
+        return capacityCount;
+    }
+
     // SolutionFitnessPair related methods =============================================================================
     // SolutionFitnessPair class to hold individual solutions and their fitness
     private static class SolutionFitnessPair {
         private final int[] solution;
         private final double fitness;
+        private int rank;
+        private double crowdingDistance;
 
         public SolutionFitnessPair(int[] solution, double fitness) {
             this.solution = solution;
             this.fitness = fitness;
+            this.rank = Integer.MAX_VALUE;
+            this.crowdingDistance = 0;
         }
 
         public int[] getSolution() {
@@ -544,78 +613,23 @@ public class NSGAII {
         public double getFitness() {
             return fitness;
         }
-    }
-    // New method to update the solutions heap without side effects
-    private static PriorityQueue<SolutionFitnessPair> updateSolutionsHeap(int[][] population) throws InterruptedException {
-        PriorityQueue<SolutionFitnessPair> iterationHeap = new PriorityQueue<>(Comparator.comparingDouble(SolutionFitnessPair::getFitness).reversed());
 
-        // Set up ExecutorService and ThreadCounter
-        ExecutorService executorService = Executors.newFixedThreadPool(numProcessors);
-        ThreadCounter threadCounter = new ThreadCounter();
-
-        // Create a list to hold Future objects
-        List<Future<SolutionFitnessPair>> futures = new ArrayList<>();
-
-        for (int[] individual : population) {
-            while (threadCounter.getProcesses() >= numProcessors - 1) //TODO: could be adjusted to a larger number when number of trips is small!
-                Thread.sleep(200);
-
-            // Submit FitnessCalculator tasks
-            futures.add(executorService.submit(new FitnessCalculator(individual, threadCounter)));
+        public int getRank() {
+            return rank;
         }
 
-        // Collect results
-        for (Future<SolutionFitnessPair> future : futures) {
-            try {
-                SolutionFitnessPair solutionPair = future.get();
-                if (solutionsHeap.size() == POP_SIZE) {
-                    if (solutionPair.getFitness() > solutionsHeap.peek().getFitness()) {
-                        solutionsHeap.poll();
-                        solutionsHeap.add(solutionPair);
-                    }
-                } else {
-                    solutionsHeap.add(solutionPair);
-                }
-                iterationHeap.add(solutionPair);
-            } catch (ExecutionException e) {
-                e.printStackTrace();
-            }
-        }
-
-        // Shutdown ExecutorService and wait for all tasks to finish
-        executorService.shutdown();
-        while (!executorService.isTerminated())
-            Thread.sleep(200);
-
-        return iterationHeap;
-    }
-    static class FitnessCalculator implements Callable<SolutionFitnessPair> {
-        private final int[] individual;
-        private final ThreadCounter threadCounter;
-
-        public FitnessCalculator(int[] individual, ThreadCounter threadCounter) {
-            this.individual = individual;
-            this.threadCounter = threadCounter;
-        }
-
-        @Override
-        public SolutionFitnessPair call() {
-            threadCounter.register();
-            try {
-                double fitness = NSGAII.calculateFitness(individual, false);
-                return new SolutionFitnessPair(individual, fitness);
-            } finally {
-                threadCounter.deregister();
-            }
+        public double getCrowdingDistance() {
+            return crowdingDistance;
         }
     }
+
     // Method to find the first feasible solution from the priority queue without altering the original heap
-    private static SolutionFitnessPair findBestFeasibleSolution() {
+    private static SolutionFitnessPair findBestFeasibleSolution(List<SolutionFitnessPair> population) {
         // Create a new priority queue that is a copy of the original but sorted in descending order by fitness
         PriorityQueue<SolutionFitnessPair> solutionsHeapCopy = new PriorityQueue<>(
                 Comparator.comparingDouble(SolutionFitnessPair::getFitness).reversed()
         );
-        solutionsHeapCopy.addAll(repairedSolutionsHeap);
+        solutionsHeapCopy.addAll(population);
 
         // Iterate through the copied solutions heap to find a feasible solution
         while (!solutionsHeapCopy.isEmpty()) {
@@ -780,20 +794,6 @@ public class NSGAII {
         } catch (IOException e) {
             e.printStackTrace();
         }
-    }
-    // Method to count the vehicles by capacity
-    private static Map<Integer, Integer> countVehicleCapacities(int[] solution) {
-        Map<Integer, Integer> vehicleLoadCount = new HashMap<>();
-        for (int vehicleId : solution) {
-            vehicleLoadCount.put(vehicleId, vehicleLoadCount.getOrDefault(vehicleId, 0) + 1);
-        }
-
-        Map<Integer, Integer> capacityCount = new HashMap<>();
-        for (int load : vehicleLoadCount.values()) {
-            capacityCount.put(load, capacityCount.getOrDefault(load, 0) + 1);
-        }
-
-        return capacityCount;
     }
 
     // Initial data extraction methods =================================================================================
