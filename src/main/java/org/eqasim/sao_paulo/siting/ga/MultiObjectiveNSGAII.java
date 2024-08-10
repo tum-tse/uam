@@ -35,7 +35,7 @@ public class MultiObjectiveNSGAII {
     private static final double CROSSOVER_RATE = 0.7; // Crossover rate
     private static final int TOURNAMENT_SIZE = 5; // Tournament size for selection
 
-    private static final double ALPHA = - 1; // Weight for changed flight distances
+    private static final double ALPHA = - 100; // Weight for changed flight distances
     private static final double BETA = - 1; // Weight for change in travel time
     private static final double BETA_CRUCIAL_TIME_ChANGE = - 0.1; //TODO: need to reconsider the value
     private static final double PENALTY_FOR_VEHICLE_CAPACITY_VIOLATION = -10000;
@@ -368,7 +368,7 @@ public class MultiObjectiveNSGAII {
                 // calculate saved flight distance
                 double savedFlightDistance = trip.calculateFlightDistance(trip.getOriginStation(), trip.getDestinationStation());
                 totalFitness += ALPHA * (-1) * savedFlightDistance;
-                tripFlightDistanceChange += savedFlightDistance;
+                tripFlightDistanceChange -= savedFlightDistance;
                 if(isFinalBestFeasibleSolution){
                     finalSolutionFlightDistanceChanges.put(trip.getTripId(), tripFlightDistanceChange);
                 }
