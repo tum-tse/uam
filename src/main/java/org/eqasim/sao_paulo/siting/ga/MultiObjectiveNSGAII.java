@@ -60,7 +60,7 @@ public class MultiObjectiveNSGAII {
     private static final double THRESHOLD_FOR_TRIPS_LONGER_THAN = SEARCH_RADIUS_ORIGIN;
     private static final String THRESHOLD_FOR_TRIPS_LONGER_THAN_STRING = String.valueOf(THRESHOLD_FOR_TRIPS_LONGER_THAN);
     private static int NUMBER_OF_TRIPS_LONGER_TAHN = 0;
-    private static int SHARED_RIDE_TRAVEL_TIME_CHANGE_THRESHOLD = 500;
+    private static int SHARED_RIDE_TRAVEL_TIME_CHANGE_THRESHOLD = 300;
 
     // Assuming these arrays are initialized elsewhere in your code:
     private static double[] flightDistances; // Distances for each trip
