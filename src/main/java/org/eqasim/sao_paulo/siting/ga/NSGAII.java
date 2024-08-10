@@ -365,7 +365,7 @@ public class NSGAII {
                 // calculate saved flight distance
                 double savedFlightDistance = trip.calculateFlightDistance(trip.getOriginStation(), trip.getDestinationStation());
                 fitness += ALPHA * (-1) * savedFlightDistance;
-                tripFlightDistanceChange += savedFlightDistance;
+                tripFlightDistanceChange -= savedFlightDistance;
                 if(isFinalBestFeasibleSolution){
                     finalSolutionFlightDistanceChanges.put(trip.getTripId(), tripFlightDistanceChange);
                 }
