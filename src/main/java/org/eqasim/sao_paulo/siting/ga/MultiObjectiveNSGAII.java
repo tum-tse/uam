@@ -785,11 +785,18 @@ public class MultiObjectiveNSGAII {
     }
     // Method to print statistics to a CSV file
     private static void printStatisticsToCsv(int[] solution, String fileName) {
+        // Create a map to count the number of trips assigned to each vehicle
+        Map<Integer, Integer> vehicleTripCount = new HashMap<>();
+        for (int vehicleId : solution) {
+            vehicleTripCount.put(vehicleId, vehicleTripCount.getOrDefault(vehicleId, 0) + 1);
+        }
+
         try (FileWriter writer = new FileWriter(fileName)) {
-            writer.append("TripId,AccessStationId,EgressStationId,TotalTravelTime,TravelTimeChange,FlightDistanceChange,DepartureRedirectionRate,ArrivalRedirectionRate\n");
+            writer.append("TripId,AssignedVehicleId,AccessStationId,EgressStationId,TotalTravelTime,TravelTimeChange,FlightDistanceChange,DepartureRedirectionRate,ArrivalRedirectionRate,VehicleTripCount\n");
             for (int i = 0; i < solution.length; i++) {
                 UAMTrip trip = subTrips.get(i);
                 String tripId = trip.getTripId();
+                int assignedVehicleId = solution[i];
                 double travelTimeChange = finalSolutionTravelTimeChanges.getOrDefault(tripId, 0.0);
                 double flightDistanceChange = finalSolutionFlightDistanceChanges.getOrDefault(tripId, 0.0);
                 double departureRedirectionRate = finalSolutionDepartureRedirectionRate.getOrDefault(tripId, 0.0);
@@ -798,8 +805,11 @@ public class MultiObjectiveNSGAII {
                 String assignedEgressStation = finalSolutionAssignedEgressStation.getOrDefault(tripId, "N/A");
                 double totalTravelTime = finalSolutionTotalTravelTime.getOrDefault(tripId, 0.0);
 
-                writer.append(String.format("%s,%s,%s,%.2f,%.2f,%.2f,%.2f,%.2f\n",
-                        tripId, assignedAccessStation, assignedEgressStation, totalTravelTime, travelTimeChange, flightDistanceChange, departureRedirectionRate, arrivalRedirectionRate));
+                // Get the number of trips assigned to the same vehicle
+                int tripCountForVehicle = vehicleTripCount.getOrDefault(assignedVehicleId, 0);
+
+                writer.append(String.format("%s,%d,%s,%s,%.2f,%.2f,%.2f,%.2f,%.2f,%d\n",
+                        tripId, assignedVehicleId, assignedAccessStation, assignedEgressStation, totalTravelTime, travelTimeChange, flightDistanceChange, departureRedirectionRate, arrivalRedirectionRate, tripCountForVehicle));
             }
         } catch (IOException e) {
             e.printStackTrace();
