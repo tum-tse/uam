@@ -1078,6 +1078,7 @@ public class GeneticAlgorithm {
             trips = lines
                     .skip(1) // Skip header line
                     .map(GeneticAlgorithm::parseTrip)
+                    .filter(trip -> trip.getDepartureTime() >= BUFFER_START_TIME && trip.getDepartureTime() < BUFFER_END_TIME) // Add the filter
                     .collect(Collectors.toList());
         } catch (IOException e) {
             e.printStackTrace();

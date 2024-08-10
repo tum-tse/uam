@@ -52,7 +52,7 @@ public class MultiObjectiveNSGAII {
 
     // Variables for the UAM problem ===================================================================================
     private static final int BUFFER_START_TIME = 3600*7; // Buffer start time for the first trip
-    private static final int BUFFER_END_TIME = 3600*7+240; // Buffer end time for the last trip
+    private static final int BUFFER_END_TIME = 3600*7+600; // Buffer end time for the last trip
     private static final double SEARCH_RADIUS_ORIGIN = 1500; // search radius for origin station
     private static final double SEARCH_RADIUS_DESTINATION = 1500; // search radius for destination station
 
@@ -60,7 +60,7 @@ public class MultiObjectiveNSGAII {
     private static final double THRESHOLD_FOR_TRIPS_LONGER_THAN = SEARCH_RADIUS_ORIGIN;
     private static final String THRESHOLD_FOR_TRIPS_LONGER_THAN_STRING = String.valueOf(THRESHOLD_FOR_TRIPS_LONGER_THAN);
     private static int NUMBER_OF_TRIPS_LONGER_TAHN = 0;
-    private static int SHARED_RIDE_TRAVEL_TIME_CHANGE_THRESHOLD = 300;
+    private static int SHARED_RIDE_TRAVEL_TIME_CHANGE_THRESHOLD = 700;
 
     // Assuming these arrays are initialized elsewhere in your code:
     private static double[] flightDistances; // Distances for each trip
@@ -106,7 +106,7 @@ public class MultiObjectiveNSGAII {
         subTrips = readTripsFromCsv(filePath);
         // Randomly select 10% trips from the list of subTrips
         subTrips = subTrips.stream()
-                .filter(trip -> rand.nextDouble() < 0.01)
+                .filter(trip -> rand.nextDouble() <= 1)
                 .collect(Collectors.toCollection(ArrayList::new));
 
         log.info("The number of UAM trips: " + subTrips.size());
@@ -927,6 +927,7 @@ public class MultiObjectiveNSGAII {
             trips = lines
                     .skip(1) // Skip header line
                     .map(MultiObjectiveNSGAII::parseTrip)
+                    .filter(trip -> trip.getDepartureTime() >= BUFFER_START_TIME && trip.getDepartureTime() < BUFFER_END_TIME) // Add the filter
                     .collect(Collectors.toList());
         } catch (IOException e) {
             e.printStackTrace();
