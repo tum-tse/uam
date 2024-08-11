@@ -156,8 +156,12 @@ public class MultiObjectiveNSGAII {
 
     // GA solver with NSGA-II modifications==============================================================================
     private static List<SolutionFitnessPair> evolvePopulation(List<SolutionFitnessPair> population, int currentGeneration) {
+        // Apply local search to improve the population after NSGA-II operations, and before offspring generation
+        population = localSearch(population);
+
         List<SolutionFitnessPair> newPop = new ArrayList<>();
 
+        // Generate new offspring by crossover and mutation
         while (newPop.size() < POP_SIZE) {
             int[] parent1 = selectParent(population);
             int[] parent2 = selectParent(population);
@@ -174,10 +178,17 @@ public class MultiObjectiveNSGAII {
             newPop.add(new SolutionFitnessPair(child, fitness));
         }
 
+        // Combine the old population and the new population
         List<SolutionFitnessPair> combinedPop = new ArrayList<>(population);
         combinedPop.addAll(newPop);
 
+        // Apply local search to improve the combined population
+        //combinedPop = localSearch(combinedPop);
+
+        // Perform non-dominated sorting on the improved population
         List<List<SolutionFitnessPair>> fronts = nonDominatedSort(combinedPop);
+
+        // Select the next generation from the sorted fronts
         List<SolutionFitnessPair> nextGeneration = new ArrayList<>();
         for (List<SolutionFitnessPair> front : fronts) {
             calculateCrowdingDistance(front);
@@ -190,6 +201,7 @@ public class MultiObjectiveNSGAII {
                 break;
             }
         }
+
         return nextGeneration;
     }
 
@@ -611,6 +623,78 @@ public class MultiObjectiveNSGAII {
         }
 
         return capacityCount;
+    }
+
+    // Local search methods ============================================================================================
+    // Ruin and recreate solution
+    private static int[] ruinSolution(int[] solution) {
+        int[] ruinedSolution = Arrays.copyOf(solution, solution.length);
+        int numTripsToRuin = rand.nextInt(ruinedSolution.length / 2) + 1; // Ruin up to half of the trips
+
+        Set<Integer> selectedIndices = new HashSet<>();
+        while (selectedIndices.size() < numTripsToRuin) {
+            int tripIndex = rand.nextInt(ruinedSolution.length);
+            if (!selectedIndices.contains(tripIndex)) {
+                selectedIndices.add(tripIndex);
+                ruinedSolution[tripIndex] = VALUE_FOR_NO_VEHICLE_AVAILABLE; // Mark the trip as unassigned
+            }
+        }
+
+        return ruinedSolution;
+    }
+    private static int[] recreateSolution(int[] ruinedSolution) {
+        int[] recreatedSolution = Arrays.copyOf(ruinedSolution, ruinedSolution.length);
+
+        for (int i = 0; i < recreatedSolution.length; i++) {
+            if (recreatedSolution[i] == VALUE_FOR_NO_VEHICLE_AVAILABLE) {
+                assignAvailableVehicle(i, recreatedSolution);
+            }
+        }
+
+        return recreatedSolution;
+    }
+/*    private static int[] localSearch(int[] solution) {
+        int[] bestSolution = Arrays.copyOf(solution, solution.length);
+        double[] bestFitness = calculateFitness(bestSolution, false);
+
+        for (int i = 0; i < 100; i++) { // Number of iterations for local search
+            int[] ruinedSolution = ruinSolution(bestSolution);
+            int[] recreatedSolution = recreateSolution(ruinedSolution);
+            double[] recreatedFitness = calculateFitness(recreatedSolution, false);
+
+            if (dominates(new SolutionFitnessPair(recreatedSolution, recreatedFitness), new SolutionFitnessPair(bestSolution, bestFitness))) {
+                bestSolution = recreatedSolution;
+                bestFitness = recreatedFitness;
+            }
+        }
+
+        return bestSolution;
+    }*/
+    private static List<SolutionFitnessPair> localSearch(List<SolutionFitnessPair> population) {
+        List<SolutionFitnessPair> improvedPopulation = new ArrayList<>();
+
+        for (SolutionFitnessPair solutionPair : population) {
+            int[] currentSolution = solutionPair.getSolution();
+            double[] currentFitness = solutionPair.getFitness();
+
+            int[] bestSolution = Arrays.copyOf(currentSolution, currentSolution.length);
+            double[] bestFitness = Arrays.copyOf(currentFitness, currentFitness.length);
+
+            for (int i = 0; i < 100; i++) { // Number of iterations for local search
+                int[] ruinedSolution = ruinSolution(bestSolution);
+                int[] recreatedSolution = recreateSolution(ruinedSolution);
+                double[] recreatedFitness = calculateFitness(recreatedSolution, false);
+
+                if (dominates(new SolutionFitnessPair(recreatedSolution, recreatedFitness), new SolutionFitnessPair(bestSolution, bestFitness))) {
+                    bestSolution = recreatedSolution;
+                    bestFitness = recreatedFitness;
+                }
+            }
+
+            improvedPopulation.add(new SolutionFitnessPair(bestSolution, bestFitness));
+        }
+
+        return improvedPopulation;
     }
 
     // SolutionFitnessPair related methods =============================================================================
