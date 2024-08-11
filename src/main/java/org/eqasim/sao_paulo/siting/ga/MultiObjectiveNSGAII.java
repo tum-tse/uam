@@ -1,8 +1,10 @@
 package org.eqasim.sao_paulo.siting.ga;
 
+import net.bhl.matsim.uam.infrastructure.readers.UAMXMLReader;
 import org.eqasim.sao_paulo.siting.Utils.*;
 
 import org.matsim.api.core.v01.Id;
+import org.matsim.api.core.v01.network.Network;
 import org.matsim.contrib.dvrp.fleet.DvrpVehicle;
 import org.matsim.contrib.dvrp.fleet.ImmutableDvrpVehicleSpecification;
 import net.bhl.matsim.uam.infrastructure.UAMStation;
@@ -13,6 +15,8 @@ import org.apache.log4j.Logger;
 import com.google.ortools.Loader;
 import com.google.ortools.constraintsolver.*;
 import com.google.ortools.constraintsolver.IntVar;
+import org.matsim.core.network.NetworkUtils;
+import org.matsim.core.network.io.MatsimNetworkReader;
 
 import java.io.IOException;
 import java.util.*;
@@ -98,11 +102,22 @@ public class MultiObjectiveNSGAII {
     // Main method to run the the specifyed algorithm ==================================================================
     public static void main(String[] args) throws IOException, InterruptedException {
         // Load data
-        DataLoader dataLoader = new DataLoader();
-        dataLoader.loadAllData();
+/*        {
+            DataLoader dataLoader = new DataLoader();
+            dataLoader.loadAllData();
+            //vehicles = dataLoader.getVehicles();
+            stations = dataLoader.getStations();
+        }*/
+        {
+            Network network = NetworkUtils.createNetwork();
+            new MatsimNetworkReader(network).readFile("scenarios/1-percent/uam-scenario/uam_network.xml.gz");
+            UAMXMLReader uamReader = new UAMXMLReader(network);
+            uamReader.readFile("scenarios/1-percent/uam-scenario/uam_vehicles.xml.gz");
+            stations = uamReader.getStations();
+        }
 
         //subTrips = extractSubTrips(dataLoader.getUamTrips());
-        String filePath = "/home/tumtse/Documents/haowu/uam/uam/scenarios/1-percent/sao_paulo_population2trips.csv";
+        String filePath = "scenarios/1-percent/sao_paulo_population2trips.csv";
         subTrips = readTripsFromCsv(filePath);
         // Randomly select 10% trips from the list of subTrips
         subTrips = subTrips.stream()
@@ -110,9 +125,6 @@ public class MultiObjectiveNSGAII {
                 .collect(Collectors.toCollection(ArrayList::new));
 
         log.info("The number of UAM trips: " + subTrips.size());
-
-        //vehicles = dataLoader.getVehicles();
-        stations = dataLoader.getStations();
 
         // Initialize the origin station and destination station for each trip
         for (UAMTrip uamTrip : subTrips) {
