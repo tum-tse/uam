@@ -157,7 +157,7 @@ public class MultiObjectiveNSGAII {
     // GA solver with NSGA-II modifications==============================================================================
     private static List<SolutionFitnessPair> evolvePopulation(List<SolutionFitnessPair> population, int currentGeneration) {
         // Apply local search to improve the population after NSGA-II operations, and before offspring generation
-        population = localSearch(population);
+        population = localSearch(population, currentGeneration);
 
         List<SolutionFitnessPair> newPop = new ArrayList<>();
 
@@ -627,9 +627,19 @@ public class MultiObjectiveNSGAII {
 
     // Local search methods ============================================================================================
     // Ruin and recreate solution
-    private static int[] ruinSolution(int[] solution) {
+
+    // Adjusted Ruin and Recreate Methods
+    // Method to determine the number of trips to ruin based on the current generation
+    private static int determineRuinDegree(int currentGeneration, int maxGenerations) {
+        // Start with higher ruin degree and gradually decrease
+        double ruinFactor = (1.0 - ((double) currentGeneration / maxGenerations));
+        return (int) Math.ceil(ruinFactor * subTrips.size() / 2);
+    }
+
+    private static int[] ruinSolution(int[] solution, int currentGeneration, int maxGenerations) {
         int[] ruinedSolution = Arrays.copyOf(solution, solution.length);
-        int numTripsToRuin = rand.nextInt(ruinedSolution.length / 2) + 1; // Ruin up to half of the trips
+
+        int numTripsToRuin = determineRuinDegree(currentGeneration, maxGenerations);
 
         Set<Integer> selectedIndices = new HashSet<>();
         while (selectedIndices.size() < numTripsToRuin) {
@@ -670,7 +680,8 @@ public class MultiObjectiveNSGAII {
 
         return bestSolution;
     }*/
-    private static List<SolutionFitnessPair> localSearch(List<SolutionFitnessPair> population) {
+    private static List<SolutionFitnessPair> localSearch(List<SolutionFitnessPair> population, int currentGeneration) {
+        int maxGenerations = 100;
         List<SolutionFitnessPair> improvedPopulation = new ArrayList<>();
 
         for (SolutionFitnessPair solutionPair : population) {
@@ -680,8 +691,8 @@ public class MultiObjectiveNSGAII {
             int[] bestSolution = Arrays.copyOf(currentSolution, currentSolution.length);
             double[] bestFitness = Arrays.copyOf(currentFitness, currentFitness.length);
 
-            for (int i = 0; i < 100; i++) { // Number of iterations for local search
-                int[] ruinedSolution = ruinSolution(bestSolution);
+            for (int i = 0; i < maxGenerations; i++) { // Number of iterations for local search
+                int[] ruinedSolution = ruinSolution(bestSolution, currentGeneration, maxGenerations);
                 int[] recreatedSolution = recreateSolution(ruinedSolution);
                 double[] recreatedFitness = calculateFitness(recreatedSolution, false);
 
