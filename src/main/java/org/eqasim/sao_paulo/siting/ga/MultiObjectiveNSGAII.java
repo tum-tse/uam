@@ -87,7 +87,7 @@ public class MultiObjectiveNSGAII {
     private static final PriorityQueue<SolutionFitnessPair> solutionsHeap = new PriorityQueue<>(Comparator.comparingDouble(p -> p.getFitness()[0])); // Modify comparator to use first fitness objective
     private static final PriorityQueue<SolutionFitnessPair> repairedSolutionsHeap = new PriorityQueue<>(Comparator.comparingDouble(p -> p.getFitness()[0])); // Modify comparator to use first fitness objective
     private static final PriorityQueue<SolutionFitnessPair> bestSolutionsAcrossGenerations = new PriorityQueue<>(
-            (a, b) -> Double.compare(b.getFitness()[0], a.getFitness()[0])  // Max heap
+            (a, b) -> Double.compare(a.getFitness()[0], b.getFitness()[0])  // Min heap
     );
     private static final int MAX_BEST_SOLUTIONS = 100;  // Adjust as needed
     private static final Map<String, Double> finalSolutionTravelTimeChanges = new HashMap<>(); // Additional field to store travel time change of each trip for the final best feasible solution
@@ -216,9 +216,11 @@ public class MultiObjectiveNSGAII {
 
         // Update the best solutions queue
         for (SolutionFitnessPair solution : nextGeneration) {
-            bestSolutionsAcrossGenerations.offer(solution);
-            if (bestSolutionsAcrossGenerations.size() > MAX_BEST_SOLUTIONS) {
-                bestSolutionsAcrossGenerations.poll();
+            if (bestSolutionsAcrossGenerations.size() < MAX_BEST_SOLUTIONS) {
+                bestSolutionsAcrossGenerations.offer(solution);
+            } else if (solution.getFitness()[0] > bestSolutionsAcrossGenerations.peek().getFitness()[0]) {
+                bestSolutionsAcrossGenerations.poll(); // Remove the lowest fitness solution
+                bestSolutionsAcrossGenerations.offer(solution);
             }
         }
 
