@@ -673,22 +673,32 @@ public class MultiObjectiveNSGAII {
 
         return ruinedSolution;
     }
-    private static int[] localSearch(int[] solution) {
-        int[] bestSolution = Arrays.copyOf(solution, solution.length);
-        double[] bestFitness = calculateFitness(bestSolution, false);
+    private static List<SolutionFitnessPair> localSearch(List<SolutionFitnessPair> population, int currentGeneration) {
+        int maxGenerations = 100;
+        List<SolutionFitnessPair> improvedPopulation = new ArrayList<>();
 
-        for (int i = 0; i < 100; i++) { // Number of iterations for local search
-            int[] ruinedSolution = ruinSolution(bestSolution);
-            int[] recreatedSolution = recreateSolution(ruinedSolution);
-            double[] recreatedFitness = calculateFitness(recreatedSolution, false);
+        for (SolutionFitnessPair solutionPair : population) {
+            int[] currentSolution = solutionPair.getSolution();
+            double[] currentFitness = solutionPair.getFitness();
 
-            if (dominates(new SolutionFitnessPair(recreatedSolution, recreatedFitness), new SolutionFitnessPair(bestSolution, bestFitness))) {
-                bestSolution = recreatedSolution;
-                bestFitness = recreatedFitness;
+            int[] bestSolution = Arrays.copyOf(currentSolution, currentSolution.length);
+            double[] bestFitness = Arrays.copyOf(currentFitness, currentFitness.length);
+
+            for (int i = 0; i < maxGenerations; i++) { // Number of iterations for local search
+                int[] ruinedSolution = ruinSolution(bestSolution, currentGeneration, maxGenerations);
+                int[] recreatedSolution = recreateSolution(ruinedSolution);
+                double[] recreatedFitness = calculateFitness(recreatedSolution, false);
+
+                if (dominates(new SolutionFitnessPair(recreatedSolution, recreatedFitness), new SolutionFitnessPair(bestSolution, bestFitness))) {
+                    bestSolution = recreatedSolution;
+                    bestFitness = recreatedFitness;
+                }
             }
+
+            improvedPopulation.add(new SolutionFitnessPair(bestSolution, bestFitness));
         }
 
-        return bestSolution;
+        return improvedPopulation;
     }*/
     // Targeted Ruin - Focus on trips that are likely to improve the solution
     private static int[] targetedRuin(SolutionFitnessPair solutionPair, int currentGeneration, int maxGenerations) {
