@@ -86,6 +86,10 @@ public class MultiObjectiveNSGAII {
     // Data container for outputs
     private static final PriorityQueue<SolutionFitnessPair> solutionsHeap = new PriorityQueue<>(Comparator.comparingDouble(p -> p.getFitness()[0])); // Modify comparator to use first fitness objective
     private static final PriorityQueue<SolutionFitnessPair> repairedSolutionsHeap = new PriorityQueue<>(Comparator.comparingDouble(p -> p.getFitness()[0])); // Modify comparator to use first fitness objective
+    private static final PriorityQueue<SolutionFitnessPair> bestSolutionsAcrossGenerations = new PriorityQueue<>(
+            (a, b) -> Double.compare(b.getFitness()[0], a.getFitness()[0])  // Max heap
+    );
+    private static final int MAX_BEST_SOLUTIONS = 100;  // Adjust as needed
     private static final Map<String, Double> finalSolutionTravelTimeChanges = new HashMap<>(); // Additional field to store travel time change of each trip for the final best feasible solution
     private static final Map<String, Double> finalSolutionFlightDistanceChanges = new HashMap<>(); // Additional field to store saved flight distance of each trip for the final best feasible solution
     private static final Map<String, Double> finalSolutionDepartureRedirectionRate = new HashMap<>(); // Additional field to store redirection rate of each trip for the final best feasible solution
@@ -148,6 +152,12 @@ public class MultiObjectiveNSGAII {
         System.out.println("Best feasible solution: " + Arrays.toString(bestFeasibleSolution));
         System.out.println("The fitness of the best feasible solution: " + Arrays.toString(bestFeasibleSolutionFitnessPair.getFitness()));
 
+/*        // Find the best feasible solution from all generations
+        SolutionFitnessPair bestFeasibleSolutionFitnessPair = findBestFeasibleSolution(new ArrayList<>(bestSolutionsAcrossGenerations));
+        int[] bestFeasibleSolution = bestFeasibleSolutionFitnessPair.getSolution();
+        System.out.println("Best feasible solution across all generations: " + Arrays.toString(bestFeasibleSolution));
+        System.out.println("The fitness of the best feasible solution: " + Arrays.toString(bestFeasibleSolutionFitnessPair.getFitness()));*/
+
         // Calculate and print the performance indicators
         calculateFitness(bestFeasibleSolution, true);
         printPerformanceIndicators(bestFeasibleSolution, "src/main/java/org/eqasim/sao_paulo/siting/ga/trip_statistics.csv");
@@ -201,6 +211,14 @@ public class MultiObjectiveNSGAII {
                         .thenComparingDouble(p -> p.getCrowdingDistance()).reversed());
                 nextGeneration.addAll(front.subList(0, POP_SIZE - nextGeneration.size()));
                 break;
+            }
+        }
+
+        // Update the best solutions queue
+        for (SolutionFitnessPair solution : nextGeneration) {
+            bestSolutionsAcrossGenerations.offer(solution);
+            if (bestSolutionsAcrossGenerations.size() > MAX_BEST_SOLUTIONS) {
+                bestSolutionsAcrossGenerations.poll();
             }
         }
 
