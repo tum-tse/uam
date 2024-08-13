@@ -137,7 +137,9 @@ public class MultiObjectiveNSGAII {
         List<SolutionFitnessPair> population = initializePopulation();
         for (int gen = 0; gen < MAX_GENERATIONS; gen++) {
             population = evolvePopulation(population, gen);
-            System.out.println("Generation " + gen + ": Best fitness = " + Arrays.toString(population.get(0).getFitness()));
+            // Find the best solution in the current population
+            SolutionFitnessPair bestSolution = Collections.max(population, Comparator.comparingDouble(p -> p.getFitness()[0]));
+            System.out.println("Generation " + gen + ": Best fitness = " + Arrays.toString(bestSolution.getFitness()));
         }
 
         // Find the best feasible solution at the end of GA execution without altering the original solutions heap
@@ -174,8 +176,8 @@ public class MultiObjectiveNSGAII {
             }
 
             child = mutate(child); // Mutation is always applied
-            double[] fitness = calculateFitness(child, false);
-            newPop.add(new SolutionFitnessPair(child, fitness));
+            SolutionFitnessPair solution = calculateFitness(child, false);
+            newPop.add(solution);
         }
 
         // Combine the old population and the new population
@@ -210,8 +212,8 @@ public class MultiObjectiveNSGAII {
         List<SolutionFitnessPair> population = new ArrayList<>();
         for (int i = 0; i < MultiObjectiveNSGAII.POP_SIZE; i++) {
             int[] individual = generateIndividual();
-            double[] fitness = calculateFitness(individual, false);
-            population.add(new SolutionFitnessPair(individual, fitness));
+            SolutionFitnessPair solution = calculateFitness(individual, false);
+            population.add(solution);
         }
         return population;
     }
@@ -317,17 +319,24 @@ public class MultiObjectiveNSGAII {
 
     // Objective function ==============================================================================================
     // Calculate fitness for an individual
-    private static double[] calculateFitness(int[] individual, boolean isFinalBestFeasibleSolution) {
-
+    private static SolutionFitnessPair calculateFitness(int[] individual, boolean isFinalBestFeasibleSolution) {
         Map<Integer, List<UAMTrip>> vehicleAssignments = new HashMap<>();
+        Map<Integer, Integer> vehicleLoadCount = new HashMap<>();
+        Map<String, Double> travelTimeChangeMap = new HashMap<>();
 
         // Organize trips by assigned vehicle
         for (int i = 0; i < individual.length; i++) {
             int vehicleId = individual[i];
+/*            if (vehicleId == VALUE_FOR_NO_VEHICLE_AVAILABLE) {
+                continue;
+            }*/
             if (!vehicleAssignments.containsKey(vehicleId)) {
                 vehicleAssignments.put(vehicleId, new ArrayList<>());
             }
             vehicleAssignments.get(vehicleId).add(subTrips.get(i));
+
+            // Update vehicle load count
+            vehicleLoadCount.put(vehicleId, vehicleLoadCount.getOrDefault(vehicleId, 0) + 1);
         }
 
         if (isFinalBestFeasibleSolution){
@@ -341,9 +350,14 @@ public class MultiObjectiveNSGAII {
             System.out.println("Pooling rate: " + poolingRate);
         }
 
-        return getFitnessPerVehicle(isFinalBestFeasibleSolution, vehicleAssignments);
+        double[] fitness = getFitnessPerVehicle(isFinalBestFeasibleSolution, vehicleAssignments, travelTimeChangeMap);
+
+        // Store vehicleLoadCount and travelTimeChangeMap in the solution pair
+        SolutionFitnessPair solutionPair = new SolutionFitnessPair(individual, fitness, vehicleLoadCount, travelTimeChangeMap);
+
+        return solutionPair;
     }
-    private static double[] getFitnessPerVehicle(boolean isFinalBestFeasibleSolution, Map<Integer, List<UAMTrip>> vehicleAssignments) {
+    private static double[] getFitnessPerVehicle(boolean isFinalBestFeasibleSolution, Map<Integer, List<UAMTrip>> vehicleAssignments, Map<String, Double> travelTimeChangeMap) {
         double totalFitness = 0.0;
         double totalDistanceChange = 0.0;
         double totalTimeChange = 0.0;
@@ -359,7 +373,7 @@ public class MultiObjectiveNSGAII {
             if (trips.isEmpty()) continue;
             if (trips.size() == 1){
                 UAMTrip trip = trips.get(0);
-                totalFitness = getFitnessForNonPooledOrBaseTrip(trip, originStationOfVehicle, destinationStationOfVehicle, totalFitness, isFinalBestFeasibleSolution);
+                totalFitness = getFitnessForNonPooledOrBaseTrip(trip, originStationOfVehicle, destinationStationOfVehicle, totalFitness, isFinalBestFeasibleSolution, travelTimeChangeMap);
                 continue;
             }
 
@@ -377,7 +391,7 @@ public class MultiObjectiveNSGAII {
             // Calculate fitness based on the proposed pooling option
             for (UAMTrip trip : trips) {
                 if(trip.getTripId().equals(baseTrip.getTripId())){
-                    totalFitness = getFitnessForNonPooledOrBaseTrip(trip, originStationOfVehicle, destinationStationOfVehicle, totalFitness, isFinalBestFeasibleSolution);
+                    totalFitness = getFitnessForNonPooledOrBaseTrip(trip, originStationOfVehicle, destinationStationOfVehicle, totalFitness, isFinalBestFeasibleSolution, travelTimeChangeMap);
                     continue;
                 }
 
@@ -412,9 +426,13 @@ public class MultiObjectiveNSGAII {
                 double additionalTravelTimeDueToEgressMatching = getTravelTimeChangeDueToEgressMatching(trip, destinationStationOfVehicle);
                 totalFitness += BETA * additionalTravelTimeDueToEgressMatching;
                 tripTimeChange += additionalTravelTimeDueToEgressMatching;
+
                 if(isFinalBestFeasibleSolution){
                     finalSolutionTravelTimeChanges.put(trip.getTripId(), tripTimeChange);
                 }
+
+                travelTimeChangeMap.put(trip.getTripId(), tripTimeChange);
+
                 if(isFinalBestFeasibleSolution){
                     double departureRedirectionRate = ( trip.calculateAccessTeleportationDistance(originStationOfVehicle) - trip.calculateAccessTeleportationDistance(trip.getOriginStation()) ) / ( trip.calculateAccessTeleportationDistance(trip.getOriginStation()) );
                     finalSolutionDepartureRedirectionRate.put(trip.getTripId(), departureRedirectionRate);
@@ -435,13 +453,13 @@ public class MultiObjectiveNSGAII {
                 totalTimeChange += tripTimeChange;
             }
             //add penalty for the case when vehicle capacity is violated
-            if(trips.size()>VEHICLE_CAPACITY){
-                totalViolationPenalty += PENALTY_FOR_VEHICLE_CAPACITY_VIOLATION * (trips.size()-VEHICLE_CAPACITY);
+            if(trips.size() > VEHICLE_CAPACITY){
+                totalViolationPenalty += PENALTY_FOR_VEHICLE_CAPACITY_VIOLATION * (trips.size() - VEHICLE_CAPACITY);
             }
         }
         return new double[]{totalFitness, totalDistanceChange, totalTimeChange, totalViolationPenalty};
     }
-    private static double getFitnessForNonPooledOrBaseTrip(UAMTrip trip, UAMStation originStationOfVehicle, UAMStation destinationStationOfVehicle, double totalFitness, boolean isFinalBestFeasibleSolution) {
+    private static double getFitnessForNonPooledOrBaseTrip(UAMTrip trip, UAMStation originStationOfVehicle, UAMStation destinationStationOfVehicle, double totalFitness, boolean isFinalBestFeasibleSolution, Map<String, Double> travelTimeChangeMap) {
         double tripTimeChange = 0.0;
         double tripFlightDistanceChange = 0.0;
 
@@ -468,9 +486,13 @@ public class MultiObjectiveNSGAII {
         double travelTimeChangeDueToEgressMatching = getTravelTimeChangeDueToEgressMatching(trip, destinationStationOfVehicle);
         totalFitness += BETA * travelTimeChangeDueToEgressMatching;
         tripTimeChange += travelTimeChangeDueToEgressMatching;
+
         if(isFinalBestFeasibleSolution){
             finalSolutionTravelTimeChanges.put(trip.getTripId(), tripTimeChange);
         }
+
+        travelTimeChangeMap.put(trip.getTripId(), tripTimeChange);
+
         if(isFinalBestFeasibleSolution){
             double departureRedirectionRate = ( trip.calculateAccessTeleportationDistance(originStationOfVehicle) - trip.calculateAccessTeleportationDistance(trip.getOriginStation()) ) / ( trip.calculateAccessTeleportationDistance(trip.getOriginStation()) );
             finalSolutionDepartureRedirectionRate.put(trip.getTripId(), departureRedirectionRate);
@@ -635,8 +657,7 @@ public class MultiObjectiveNSGAII {
         double ruinFactor = (1.0 - ((double) currentGeneration / maxGenerations));
         return (int) Math.ceil(ruinFactor * subTrips.size() / 2);
     }
-
-    private static int[] ruinSolution(int[] solution, int currentGeneration, int maxGenerations) {
+    /*private static int[] ruinSolution(int[] solution, int currentGeneration, int maxGenerations) {
         int[] ruinedSolution = Arrays.copyOf(solution, solution.length);
 
         int numTripsToRuin = determineRuinDegree(currentGeneration, maxGenerations);
@@ -652,18 +673,7 @@ public class MultiObjectiveNSGAII {
 
         return ruinedSolution;
     }
-    private static int[] recreateSolution(int[] ruinedSolution) {
-        int[] recreatedSolution = Arrays.copyOf(ruinedSolution, ruinedSolution.length);
-
-        for (int i = 0; i < recreatedSolution.length; i++) {
-            if (recreatedSolution[i] == VALUE_FOR_NO_VEHICLE_AVAILABLE) {
-                assignAvailableVehicle(i, recreatedSolution);
-            }
-        }
-
-        return recreatedSolution;
-    }
-/*    private static int[] localSearch(int[] solution) {
+    private static int[] localSearch(int[] solution) {
         int[] bestSolution = Arrays.copyOf(solution, solution.length);
         double[] bestFitness = calculateFitness(bestSolution, false);
 
@@ -680,45 +690,93 @@ public class MultiObjectiveNSGAII {
 
         return bestSolution;
     }*/
+    // Targeted Ruin - Focus on trips that are likely to improve the solution
+    private static int[] targetedRuin(SolutionFitnessPair solutionPair, int currentGeneration, int maxGenerations) {
+        int[] ruinedSolution = solutionPair.getSolution();
+
+        // Reset the vehicle load count and travel time change map
+        Map<Integer, Integer> vehicleLoadCount = solutionPair.getVehicleLoadCount();
+        Map<String, Double> travelTimeChangeMap = solutionPair.getTravelTimeChangeMap();
+
+        List<Integer> targetTrips = new ArrayList<>();
+
+        for (int i = 0; i < ruinedSolution.length; i++) {
+            int vehicleId = ruinedSolution[i];
+
+            if ((vehicleLoadCount.containsKey(vehicleId) && vehicleLoadCount.get(vehicleId) > VEHICLE_CAPACITY) || travelTimeChangeMap.get(subTrips.get(i).getTripId()) > SHARED_RIDE_TRAVEL_TIME_CHANGE_THRESHOLD) {
+                targetTrips.add(i);
+            }
+        }
+
+        // Randomly select trips to ruin from the targeted trips
+        int numTripsToRuin = Math.min(targetTrips.size(), determineRuinDegree(currentGeneration, maxGenerations));  // Adjust as needed
+        Collections.shuffle(targetTrips);
+
+        for (int i = 0; i < numTripsToRuin; i++) {
+            int tripIndex = targetTrips.get(i);
+            ruinedSolution[tripIndex] = VALUE_FOR_NO_VEHICLE_AVAILABLE; // Mark the trip as unassigned
+        }
+
+        return ruinedSolution;
+    }
+    private static int[] recreateSolution(int[] ruinedSolution) {
+        int[] recreatedSolution = Arrays.copyOf(ruinedSolution, ruinedSolution.length);
+
+        for (int i = 0; i < recreatedSolution.length; i++) {
+            if (recreatedSolution[i] == VALUE_FOR_NO_VEHICLE_AVAILABLE) {
+                assignAvailableVehicle(i, recreatedSolution);
+            }
+        }
+
+        return recreatedSolution;
+    }
     private static List<SolutionFitnessPair> localSearch(List<SolutionFitnessPair> population, int currentGeneration) {
         int maxGenerations = 100;
+
         List<SolutionFitnessPair> improvedPopulation = new ArrayList<>();
 
         for (SolutionFitnessPair solutionPair : population) {
-            int[] currentSolution = solutionPair.getSolution();
-            double[] currentFitness = solutionPair.getFitness();
-
-            int[] bestSolution = Arrays.copyOf(currentSolution, currentSolution.length);
-            double[] bestFitness = Arrays.copyOf(currentFitness, currentFitness.length);
 
             for (int i = 0; i < maxGenerations; i++) { // Number of iterations for local search
-                int[] ruinedSolution = ruinSolution(bestSolution, currentGeneration, maxGenerations);
+                int[] ruinedSolution = targetedRuin(solutionPair, currentGeneration, maxGenerations);
                 int[] recreatedSolution = recreateSolution(ruinedSolution);
-                double[] recreatedFitness = calculateFitness(recreatedSolution, false);
+                SolutionFitnessPair newSolution = calculateFitness(recreatedSolution, false);
 
-                if (dominates(new SolutionFitnessPair(recreatedSolution, recreatedFitness), new SolutionFitnessPair(bestSolution, bestFitness))) {
-                    bestSolution = recreatedSolution;
-                    bestFitness = recreatedFitness;
+                if (!dominates(newSolution, solutionPair)) {
+                    solutionPair = newSolution;
                 }
             }
 
-            improvedPopulation.add(new SolutionFitnessPair(bestSolution, bestFitness));
+            improvedPopulation.add(solutionPair);
         }
 
         return improvedPopulation;
     }
 
     // SolutionFitnessPair related methods =============================================================================
-    // SolutionFitnessPair class to hold individual solutions and their fitness
+    // SolutionFitnessPair class to hold individual solutions and their fitness, along with vehicleLoadCount and travelTimeChangeMap
     private static class SolutionFitnessPair {
         private final int[] solution;
         private final double[] fitness;
+        private final Map<Integer, Integer> vehicleLoadCount;
+        private final Map<String, Double> travelTimeChangeMap;
         private int rank;
         private double crowdingDistance;
 
         public SolutionFitnessPair(int[] solution, double[] fitness) {
             this.solution = solution;
             this.fitness = fitness;
+            this.vehicleLoadCount = null;
+            this.travelTimeChangeMap = null;
+            this.rank = Integer.MAX_VALUE;
+            this.crowdingDistance = 0;
+        }
+
+        public SolutionFitnessPair(int[] solution, double[] fitness, Map<Integer, Integer> vehicleLoadCount, Map<String, Double> travelTimeChangeMap) {
+            this.solution = solution;
+            this.fitness = fitness;
+            this.vehicleLoadCount = vehicleLoadCount;
+            this.travelTimeChangeMap = travelTimeChangeMap;
             this.rank = Integer.MAX_VALUE;
             this.crowdingDistance = 0;
         }
@@ -737,6 +795,14 @@ public class MultiObjectiveNSGAII {
 
         public double getCrowdingDistance() {
             return crowdingDistance;
+        }
+
+        public Map<Integer, Integer> getVehicleLoadCount() {
+            return vehicleLoadCount;
+        }
+
+        public Map<String, Double> getTravelTimeChangeMap() {
+            return travelTimeChangeMap;
         }
     }
 
@@ -955,6 +1021,7 @@ public class MultiObjectiveNSGAII {
             feedDataForVehicleCreation(subTrip, true);
         }
     }
+
     private static UAMVehicle feedDataForVehicleCreation(UAMTrip subTrip, boolean isAddingVehicleBeforeInitialization) {
         UAMStation nearestOriginStation = findNearestStation(subTrip, stations, true);
         UAMStation nearestDestinationStation = findNearestStation(subTrip, stations, false);
@@ -1006,6 +1073,7 @@ public class MultiObjectiveNSGAII {
         return new UAMVehicle(vehicleSpecification,
                 uamStation.getLocationLink(), uamStation.getId(), vehicleType);
     }
+
     private static UAMStation findNearestStation(UAMTrip trip, Map<Id<UAMStation>, UAMStation> stations, boolean accessLeg) {
         UAMStation nearestStation = null;
         double shortestDistance = Double.MAX_VALUE;
@@ -1042,6 +1110,7 @@ public class MultiObjectiveNSGAII {
 
         return trips;
     }
+
     private static UAMTrip parseTrip(String line) {
         String[] fields = line.split(",");
         String tripId = fields[0];
@@ -1061,100 +1130,6 @@ public class MultiObjectiveNSGAII {
         return new UAMTrip(tripId, originX, originY, destX, destY, departureTime, flightDistance, origStation, destStation, purpose, income);
     }
 
-    // Simulated Annealing to Repair Infeasible Solutions ==============================================================
-    private static void repairInfeasibleSolutionsSA(int numProcessors, ExecutorService executorService, ArrayBlockingQueue<SolutionFitnessPair> queue) throws InterruptedException {
-
-        // Add all infeasible solutions to the queue
-        for (SolutionFitnessPair solutionPair : solutionsHeap) {
-            if (!isFeasible(solutionPair.getSolution(), true)) {
-                queue.add(solutionPair);
-            } else {
-                repairedSolutionsHeap.add(solutionPair); //TODO: could also be "simulated annealed" for better performance
-            }
-        }
-
-        //executorService.invokeAll(tasks);
-        // Execute tasks and wait for completion
-        ThreadCounter threadCounter = new ThreadCounter();
-        int counter = 0;
-        int taskSize = queue.size();
-        if (!queue.isEmpty()){
-            log.info("Simulated Annealing starts...");
-        }
-        log.info("Que size is: " + taskSize);
-        while (!queue.isEmpty()) {
-
-            while (threadCounter.getProcesses() >= numProcessors - 1)
-                Thread.sleep(200);
-
-            SolutionFitnessPair solutionPair = queue.poll();
-            if (solutionPair != null) {
-                executorService.execute(new SimulatedAnnealing(solutionPair.getSolution(), threadCounter));
-            }
-
-            counter++;
-            log.info("Calculation completion: " + counter + "/" + taskSize + " ("
-                    + String.format("%.0f", (double) counter / taskSize * 100) + "%).");
-        }
-        executorService.shutdown();
-    }
-
-    // Simulated Annealing Method
-    static class SimulatedAnnealing implements Runnable {
-        private int[] solution;
-        private ThreadCounter threadCounter;
-        SimulatedAnnealing(int[] solution, ThreadCounter threadCounter){
-            this.solution = solution;
-            this.threadCounter = threadCounter;
-        }
-
-        @Override
-        public void run() {
-            threadCounter.register();
-
-            double temperature = 100000.0;
-            double coolingRate = 0.003;
-
-            int[] currentSolution = Arrays.copyOf(solution, solution.length);
-            int[] bestSolution = Arrays.copyOf(currentSolution, currentSolution.length);
-            double[] bestFitness = calculateFitness(bestSolution, false);
-
-            while (temperature > 1) {
-                int[] newSolution = Arrays.copyOf(currentSolution, currentSolution.length);
-
-                // Randomly change vehicle assignment to repair the solution
-                int tripIndex = rand.nextInt(newSolution.length);
-                assignAvailableVehicle(tripIndex, newSolution);
-
-                double[] currentFitness = calculateFitness(currentSolution, false);
-                double[] newFitness = calculateFitness(newSolution, false);
-
-                if (acceptanceProbability(currentFitness[0], newFitness[0], temperature) > rand.nextDouble()) {
-                    currentSolution = Arrays.copyOf(newSolution, newSolution.length);
-                }
-
-                if (newFitness[0] > bestFitness[0] && isFeasible(newSolution, false)) {
-                    bestSolution = Arrays.copyOf(newSolution, newSolution.length);
-                    bestFitness = newFitness;
-                }
-
-                temperature *= 1 - coolingRate;
-            }
-
-            if (isFeasible(bestSolution, false)) {
-                repairedSolutionsHeap.add(new SolutionFitnessPair(bestSolution, bestFitness));
-            }
-
-            threadCounter.deregister();
-        }
-        // Acceptance Probability Calculation for Simulated Annealing
-        private static double acceptanceProbability(double currentFitness, double newFitness, double temperature) {
-            if (newFitness > currentFitness) {
-                return 1.0;
-            }
-            return Math.exp((newFitness - currentFitness) / temperature);
-        }
-    }
     public static class ThreadCounter {
         private int processes;
 
@@ -1176,6 +1151,7 @@ public class MultiObjectiveNSGAII {
         // Load the OR-Tools native library
         Loader.loadNativeLibraries();
     }
+
     private static void repairInfeasibleSolutions(int numProcessors, ExecutorService executorService, ArrayBlockingQueue<SolutionFitnessPair> queue) throws InterruptedException {
         // Add all infeasible solutions to the queue
         for (SolutionFitnessPair solutionPair : solutionsHeap) {
@@ -1206,7 +1182,7 @@ public class MultiObjectiveNSGAII {
                         try {
                             int[] solution = solutionPair.getSolution();
                             if (fixInfeasibleSolutionWithORTools(solution)) {
-                                repairedSolutionsHeap.add(new SolutionFitnessPair(solution, calculateFitness(solution, false)));
+                                repairedSolutionsHeap.add(calculateFitness(solution, false));
                             }
                         } finally {
                             threadCounter.deregister();
@@ -1220,6 +1196,7 @@ public class MultiObjectiveNSGAII {
         }
         executorService.shutdown();
     }
+
     private static boolean fixInfeasibleSolutionWithORTools(int[] solution) {
         Solver solver = null;
         try {
