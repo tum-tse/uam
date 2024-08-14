@@ -64,33 +64,32 @@ public class MultiObjectiveNSGAII {
     // Helpers for the UAM problem =====================================================================================
     private static final double THRESHOLD_FOR_TRIPS_LONGER_THAN = SEARCH_RADIUS_ORIGIN;
     private static final String THRESHOLD_FOR_TRIPS_LONGER_THAN_STRING = String.valueOf(THRESHOLD_FOR_TRIPS_LONGER_THAN);
-    private static int NUMBER_OF_TRIPS_LONGER_TAHN = 0;
-    private static int SHARED_RIDE_TRAVEL_TIME_CHANGE_THRESHOLD = 700;
+    private static final int SHARED_RIDE_TRAVEL_TIME_CHANGE_THRESHOLD = 700;
 
     // Data container for the UAM problem ==============================================================================
     private static List<UAMTrip> trips;
-    private static List<UAMTrip> subTrips = null;
+    private List<UAMTrip> subTrips = null;
     private static Map<Id<UAMStation>, UAMStation> stations = null;
-    private static final Map<Id<UAMStation>, List<UAMVehicle>> originStationVehicleMap = new HashMap<>();
-    private static final Map<Id<DvrpVehicle>, UAMStation> vehicleOriginStationMap = new ConcurrentHashMap<>();
-    private static final Map<Id<DvrpVehicle>, UAMStation> vehicleDestinationStationMap = new ConcurrentHashMap<>();
-    private static Map<String, List<UAMVehicle>> tripVehicleMap = new ConcurrentHashMap<>(); // Update tripVehicleMap to use ConcurrentHashMap
+    private final Map<Id<UAMStation>, List<UAMVehicle>> originStationVehicleMap = new HashMap<>();
+    private final Map<Id<DvrpVehicle>, UAMStation> vehicleOriginStationMap = new ConcurrentHashMap<>();
+    private final Map<Id<DvrpVehicle>, UAMStation> vehicleDestinationStationMap = new ConcurrentHashMap<>();
+    private Map<String, List<UAMVehicle>> tripVehicleMap = new ConcurrentHashMap<>(); // Update tripVehicleMap to use ConcurrentHashMap
     //private static final Map<UAMVehicle, Integer> vehicleOccupancyMap = new HashMap<>();
 
     // Data container for outputs
-    private static final PriorityQueue<SolutionFitnessPair> solutionsHeap = new PriorityQueue<>(Comparator.comparingDouble(p -> p.getFitness()[0])); // Modify comparator to use first fitness objective
-    private static final PriorityQueue<SolutionFitnessPair> repairedSolutionsHeap = new PriorityQueue<>(Comparator.comparingDouble(p -> p.getFitness()[0])); // Modify comparator to use first fitness objective
-    private static final PriorityQueue<SolutionFitnessPair> bestSolutionsAcrossGenerations = new PriorityQueue<>(
+    private final PriorityQueue<SolutionFitnessPair> solutionsHeap = new PriorityQueue<>(Comparator.comparingDouble(p -> p.getFitness()[0])); // Modify comparator to use first fitness objective
+    private final PriorityQueue<SolutionFitnessPair> repairedSolutionsHeap = new PriorityQueue<>(Comparator.comparingDouble(p -> p.getFitness()[0])); // Modify comparator to use first fitness objective
+    private final PriorityQueue<SolutionFitnessPair> bestSolutionsAcrossGenerations = new PriorityQueue<>(
             (a, b) -> Double.compare(a.getFitness()[0], b.getFitness()[0])  // Min heap
     );
     private static final int MAX_BEST_SOLUTIONS = 100;  // Adjust as needed
-    private static final Map<String, Double> finalSolutionTravelTimeChanges = new HashMap<>(); // Additional field to store travel time change of each trip for the final best feasible solution
-    private static final Map<String, Double> finalSolutionFlightDistanceChanges = new HashMap<>(); // Additional field to store saved flight distance of each trip for the final best feasible solution
-    private static final Map<String, Double> finalSolutionDepartureRedirectionRate = new HashMap<>(); // Additional field to store redirection rate of each trip for the final best feasible solution
-    private static final Map<String, Double> finalSolutionArrivalRedirectionRate = new HashMap<>(); // Additional field to store redirection rate of each trip for the final best feasible solution
-    private static final Map<String, Double> finalSolutionTotalTravelTime = new HashMap<>(); // Additional field to store total travel time of each trip for the final best feasible solution
-    private static final Map<String, String> finalSolutionAssignedAccessStation = new HashMap<>(); // Additional field to store assigned access station of each trip for the final best feasible solution
-    private static final Map<String, String> finalSolutionAssignedEgressStation = new HashMap<>(); // Additional field to store assigned egress station of each trip for the final best feasible solution
+    private final Map<String, Double> finalSolutionTravelTimeChanges = new HashMap<>(); // Additional field to store travel time change of each trip for the final best feasible solution
+    private final Map<String, Double> finalSolutionFlightDistanceChanges = new HashMap<>(); // Additional field to store saved flight distance of each trip for the final best feasible solution
+    private final Map<String, Double> finalSolutionDepartureRedirectionRate = new HashMap<>(); // Additional field to store redirection rate of each trip for the final best feasible solution
+    private final Map<String, Double> finalSolutionArrivalRedirectionRate = new HashMap<>(); // Additional field to store redirection rate of each trip for the final best feasible solution
+    private final Map<String, Double> finalSolutionTotalTravelTime = new HashMap<>(); // Additional field to store total travel time of each trip for the final best feasible solution
+    private final Map<String, String> finalSolutionAssignedAccessStation = new HashMap<>(); // Additional field to store assigned access station of each trip for the final best feasible solution
+    private final Map<String, String> finalSolutionAssignedEgressStation = new HashMap<>(); // Additional field to store assigned egress station of each trip for the final best feasible solution
 
     // Parallel computing
     private static final int numProcessors = Runtime.getRuntime().availableProcessors();
@@ -131,7 +130,7 @@ public class MultiObjectiveNSGAII {
     }
 
     // Main method to run the the specifyed algorithm ==================================================================
-    public static double callAlgorithm(String[] args) throws IOException, InterruptedException {
+    public static double[] callAlgorithm(String[] args) throws IOException, InterruptedException {
         if (args.length < 4) {
             System.out.println("Usage: java MultiObjectiveNSGAII <BUFFER_END_TIME> <SEARCH_RADIUS_ORIGIN> <SEARCH_RADIUS_DESTINATION> <ENABLE_LOCAL_SEARCH>");
             System.exit(1);
@@ -145,7 +144,7 @@ public class MultiObjectiveNSGAII {
         MultiObjectiveNSGAII instance = new MultiObjectiveNSGAII();
         return instance.runAlgorithm();
     }
-    public double runAlgorithm() {
+    public double[] runAlgorithm() {
         // Randomly select 10% trips from the list of subTrips
         subTrips = trips.stream()
                 .filter(trip -> trip.getDepartureTime() >= BUFFER_START_TIME && trip.getDepartureTime() < BUFFER_END_TIME) // Add the filter
@@ -188,13 +187,13 @@ public class MultiObjectiveNSGAII {
         printPerformanceIndicators(bestFeasibleSolution, "src/main/java/org/eqasim/sao_paulo/siting/ga/trip_statistics.csv");
 
         // Print the NUMBER_OF_TRIPS_LONGER_THAN
-        System.out.println("Threshold for trips longer than " + THRESHOLD_FOR_TRIPS_LONGER_THAN_STRING + ": " + NUMBER_OF_TRIPS_LONGER_TAHN);
+        //System.out.println("Threshold for trips longer than " + THRESHOLD_FOR_TRIPS_LONGER_THAN_STRING + ": " + NUMBER_OF_TRIPS_LONGER_TAHN);
 
-        return bestFeasibleSolutionFitness[0];
+        return new double[]{BUFFER_END_TIME, SEARCH_RADIUS_ORIGIN, SEARCH_RADIUS_DESTINATION, bestFeasibleSolutionFitness[0]};
     }
 
     // GA solver with NSGA-II modifications==============================================================================
-    private static List<SolutionFitnessPair> evolvePopulation(List<SolutionFitnessPair> population, int currentGeneration) {
+    private List<SolutionFitnessPair> evolvePopulation(List<SolutionFitnessPair> population, int currentGeneration) {
         // Apply local search to improve the population after NSGA-II operations, and before offspring generation
         if (ENABLE_LOCAL_SEARCH) {
             population = localSearch(population, currentGeneration);
@@ -257,7 +256,7 @@ public class MultiObjectiveNSGAII {
     }
 
     // Initialize population with random assignments
-    private static List<SolutionFitnessPair> initializePopulation() {
+    private List<SolutionFitnessPair> initializePopulation() {
         List<SolutionFitnessPair> population = new ArrayList<>();
         for (int i = 0; i < MultiObjectiveNSGAII.POP_SIZE; i++) {
             int[] individual = generateIndividual();
@@ -268,7 +267,7 @@ public class MultiObjectiveNSGAII {
     }
 
     // Generate a random individual
-    private static int[] generateIndividual() {
+    private int[] generateIndividual() {
         int[] individual = new int[subTrips.size()];
         //resetVehicleCapacities(tripVehicleMap); // Reset the vehicle capacity since capacity of vehicles will be updated during each individual generation
         //resetVehicleOccupancy(vehicleOccupancyMap);
@@ -305,7 +304,7 @@ public class MultiObjectiveNSGAII {
     }
 
     // Mutation - Randomly change vehicle assignment
-    private static int[] mutate(int[] individual) {
+    private int[] mutate(int[] individual) {
         //resetVehicleCapacities(tripVehicleMap); // Reset the vehicle capacity since capacity of vehicles will be updated during each individual generation
         //resetVehicleOccupancy(vehicleOccupancyMap);
         for (int i = 0; i < individual.length; i++) {
@@ -317,7 +316,7 @@ public class MultiObjectiveNSGAII {
     }
 
     // Method to assign an available vehicle to a trip
-    private static void assignAvailableVehicle(int i, int[] individual) {
+    private void assignAvailableVehicle(int i, int[] individual) {
         UAMTrip trip = subTrips.get(i);
         List<UAMVehicle> vehicleList = tripVehicleMap.get(trip.getTripId());
 
@@ -368,7 +367,7 @@ public class MultiObjectiveNSGAII {
 
     // Objective function ==============================================================================================
     // Calculate fitness for an individual
-    private static SolutionFitnessPair calculateFitness(int[] individual, boolean isFinalBestFeasibleSolution) {
+    private SolutionFitnessPair calculateFitness(int[] individual, boolean isFinalBestFeasibleSolution) {
         Map<Integer, List<UAMTrip>> vehicleAssignments = new HashMap<>();
         Map<Integer, Integer> vehicleLoadCount = new HashMap<>();
         Map<String, Double> travelTimeChangeMap = new HashMap<>();
@@ -406,7 +405,7 @@ public class MultiObjectiveNSGAII {
 
         return solutionPair;
     }
-    private static double[] getFitnessPerVehicle(boolean isFinalBestFeasibleSolution, Map<Integer, List<UAMTrip>> vehicleAssignments, Map<String, Double> travelTimeChangeMap) {
+    private double[] getFitnessPerVehicle(boolean isFinalBestFeasibleSolution, Map<Integer, List<UAMTrip>> vehicleAssignments, Map<String, Double> travelTimeChangeMap) {
         double totalFitness = 0.0;
         double totalDistanceChange = 0.0;
         double totalTimeChange = 0.0;
@@ -508,7 +507,7 @@ public class MultiObjectiveNSGAII {
         }
         return new double[]{totalFitness, totalDistanceChange, totalTimeChange, totalViolationPenalty};
     }
-    private static double getFitnessForNonPooledOrBaseTrip(UAMTrip trip, UAMStation originStationOfVehicle, UAMStation destinationStationOfVehicle, double totalFitness, boolean isFinalBestFeasibleSolution, Map<String, Double> travelTimeChangeMap) {
+    private double getFitnessForNonPooledOrBaseTrip(UAMTrip trip, UAMStation originStationOfVehicle, UAMStation destinationStationOfVehicle, double totalFitness, boolean isFinalBestFeasibleSolution, Map<String, Double> travelTimeChangeMap) {
         double tripTimeChange = 0.0;
         double tripFlightDistanceChange = 0.0;
 
@@ -611,7 +610,7 @@ public class MultiObjectiveNSGAII {
         return fronts;
     }
 
-    private static Map<String, List<UAMVehicle>> findNearbyVehiclesToTrips(List<UAMTrip> subTrips) {
+    private Map<String, List<UAMVehicle>> findNearbyVehiclesToTrips(List<UAMTrip> subTrips) {
         Map<String, List<UAMVehicle>> tripVehicleMap = new HashMap<>();
         for (UAMTrip trip : subTrips) {
             for (UAMStation station : stations.values()) {
@@ -701,7 +700,7 @@ public class MultiObjectiveNSGAII {
 
     // Adjusted Ruin and Recreate Methods
     // Method to determine the number of trips to ruin based on the current generation
-    private static int determineRuinDegree(int currentGeneration, int maxGenerations) {
+    private int determineRuinDegree(int currentGeneration, int maxGenerations) {
         // Start with higher ruin degree and gradually decrease
         double ruinFactor = (1.0 - ((double) currentGeneration / maxGenerations));
         return (int) Math.ceil(ruinFactor * subTrips.size() / 2);
@@ -750,7 +749,7 @@ public class MultiObjectiveNSGAII {
         return improvedPopulation;
     }*/
     // Targeted Ruin - Focus on trips that are likely to improve the solution
-    private static int[] targetedRuin(SolutionFitnessPair solutionPair, int currentGeneration, int maxGenerations) {
+    private int[] targetedRuin(SolutionFitnessPair solutionPair, int currentGeneration, int maxGenerations) {
         int[] ruinedSolution = solutionPair.getSolution();
 
         // Reset the vehicle load count and travel time change map
@@ -778,7 +777,7 @@ public class MultiObjectiveNSGAII {
 
         return ruinedSolution;
     }
-    private static int[] recreateSolution(int[] ruinedSolution) {
+    private int[] recreateSolution(int[] ruinedSolution) {
         int[] recreatedSolution = Arrays.copyOf(ruinedSolution, ruinedSolution.length);
 
         for (int i = 0; i < recreatedSolution.length; i++) {
@@ -789,7 +788,7 @@ public class MultiObjectiveNSGAII {
 
         return recreatedSolution;
     }
-    private static List<SolutionFitnessPair> localSearch(List<SolutionFitnessPair> population, int currentGeneration) {
+    private List<SolutionFitnessPair> localSearch(List<SolutionFitnessPair> population, int currentGeneration) {
         int maxGenerations = 100;
 
         List<SolutionFitnessPair> improvedPopulation = new ArrayList<>();
@@ -905,7 +904,7 @@ public class MultiObjectiveNSGAII {
 
     // Performance indicators ==========================================================================================
     // Method to calculate and print the performance indicators
-    private static void printPerformanceIndicators(int[] solution, String tripStatisticsCSVFile) {
+    private void printPerformanceIndicators(int[] solution, String tripStatisticsCSVFile) {
         // Method to calculate and print the number of vehicles by capacity
         Map<Integer, Integer> capacityCount = countVehicleCapacities(solution);
         Set<Integer> uniqueVehicles = new HashSet<>();
@@ -1016,7 +1015,7 @@ public class MultiObjectiveNSGAII {
         printStatisticsToCsv(solution, tripStatisticsCSVFile);
     }
     // Method to print statistics to a CSV file
-    private static void printStatisticsToCsv(int[] solution, String fileName) {
+    private void printStatisticsToCsv(int[] solution, String fileName) {
         // Create a map to count the number of trips assigned to each vehicle
         Map<Integer, Integer> vehicleTripCount = new HashMap<>();
         for (int vehicleId : solution) {
@@ -1057,7 +1056,7 @@ public class MultiObjectiveNSGAII {
     }
 
     // Method to create UAM vehicles and assign them to stations in the initialization phase (could also be used in later stage)
-    private static void saveStationVehicleNumber(List<UAMTrip> subTrips) {
+    private void saveStationVehicleNumber(List<UAMTrip> subTrips) {
 
 /*        // Loop through the stations so that we can assign at least 1 to each station before we assign more vehicles based on the demand
         for (UAMStation station : stations.values()) {
@@ -1081,7 +1080,7 @@ public class MultiObjectiveNSGAII {
         }
     }
 
-    private static UAMVehicle feedDataForVehicleCreation(UAMTrip subTrip, boolean isAddingVehicleBeforeInitialization) {
+    private UAMVehicle feedDataForVehicleCreation(UAMTrip subTrip, boolean isAddingVehicleBeforeInitialization) {
         UAMStation nearestOriginStation = findNearestStation(subTrip, stations, true);
         UAMStation nearestDestinationStation = findNearestStation(subTrip, stations, false);
 
@@ -1210,7 +1209,7 @@ public class MultiObjectiveNSGAII {
         Loader.loadNativeLibraries();
     }
 
-    private static void repairInfeasibleSolutions(int numProcessors, ExecutorService executorService, ArrayBlockingQueue<SolutionFitnessPair> queue) throws InterruptedException {
+    private void repairInfeasibleSolutions(int numProcessors, ExecutorService executorService, ArrayBlockingQueue<SolutionFitnessPair> queue) throws InterruptedException {
         // Add all infeasible solutions to the queue
         for (SolutionFitnessPair solutionPair : solutionsHeap) {
             if (!isFeasible(solutionPair.getSolution(), true)) {
@@ -1255,7 +1254,7 @@ public class MultiObjectiveNSGAII {
         executorService.shutdown();
     }
 
-    private static boolean fixInfeasibleSolutionWithORTools(int[] solution) {
+    private boolean fixInfeasibleSolutionWithORTools(int[] solution) {
         Solver solver = null;
         try {
             solver = new Solver("FixInfeasibleSolution");
