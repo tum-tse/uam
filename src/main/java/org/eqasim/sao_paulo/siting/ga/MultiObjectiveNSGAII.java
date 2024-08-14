@@ -38,6 +38,7 @@ public class MultiObjectiveNSGAII {
     private static final double MUTATION_RATE = 0.05; // Mutation rate
     private static final double CROSSOVER_RATE = 0.7; // Crossover rate
     private static final int TOURNAMENT_SIZE = 5; // Tournament size for selection
+    private static boolean ENABLE_LOCAL_SEARCH = true; // Enable local search after each generation
 
     private static final double ALPHA = - 100; // Weight for changed flight distances
     private static final double BETA = - 1; // Weight for change in travel time
@@ -55,10 +56,10 @@ public class MultiObjectiveNSGAII {
     private static final int VEHICLE_CAPACITY = 4; // Vehicle capacity
 
     // Variables for the UAM problem ===================================================================================
-    private static final int BUFFER_START_TIME = 3600*7; // Buffer start time for the first trip
-    private static final int BUFFER_END_TIME = 3600*7+600; // Buffer end time for the last trip
-    private static final double SEARCH_RADIUS_ORIGIN = 1500; // search radius for origin station
-    private static final double SEARCH_RADIUS_DESTINATION = 1500; // search radius for destination station
+    private static double BUFFER_START_TIME = 3600*7; // Buffer start time for the first trip
+    private static double BUFFER_END_TIME = 3600*7+600; // Buffer end time for the last trip
+    private static double SEARCH_RADIUS_ORIGIN = 1500; // search radius for origin station
+    private static double SEARCH_RADIUS_DESTINATION = 1500; // search radius for destination station
 
     // Helpers for the UAM problem =====================================================================================
     private static final double THRESHOLD_FOR_TRIPS_LONGER_THAN = SEARCH_RADIUS_ORIGIN;
@@ -66,15 +67,8 @@ public class MultiObjectiveNSGAII {
     private static int NUMBER_OF_TRIPS_LONGER_TAHN = 0;
     private static int SHARED_RIDE_TRAVEL_TIME_CHANGE_THRESHOLD = 700;
 
-    // Assuming these arrays are initialized elsewhere in your code:
-    private static double[] flightDistances; // Distances for each trip
-    private static double[][] accessTimesOriginal; // Original access times for each trip
-    private static double[][] accessTimesUpdated; // Updated access times for each trip and vehicle
-    private static double[][] egressTimesOriginal; // Original egress times for each trip
-    private static double[][] egressTimesUpdated; // Updated egress times for each trip and vehicle
-    private static double[][] waitingTimes; // Waiting times at the parking station for each trip and vehicle
-
     // Data container for the UAM problem ==============================================================================
+    private static List<UAMTrip> trips;
     private static List<UAMTrip> subTrips = null;
     private static Map<Id<UAMStation>, UAMStation> stations = null;
     private static final Map<Id<UAMStation>, List<UAMVehicle>> originStationVehicleMap = new HashMap<>();
@@ -103,8 +97,13 @@ public class MultiObjectiveNSGAII {
     private static final int bufferDivider = 1;
     // TODO: Create an initial population of solutions using domain-specific knowledge (in our case is the vehicles which were used to create the initial fleet of the vehicles).
     // TODO: How to handle the extremely large travel time?
-    // Main method to run the the specifyed algorithm ==================================================================
-    public static void main(String[] args) throws IOException, InterruptedException {
+
+    // Constructor
+    public MultiObjectiveNSGAII() {
+        initialize();
+    }
+    // Initialization method
+    private void initialize() {
         // Load data
 /*        {
             DataLoader dataLoader = new DataLoader();
@@ -122,9 +121,34 @@ public class MultiObjectiveNSGAII {
 
         //subTrips = extractSubTrips(dataLoader.getUamTrips());
         String filePath = "scenarios/1-percent/sao_paulo_population2trips.csv";
-        subTrips = readTripsFromCsv(filePath);
+        trips = readTripsFromCsv(filePath);
+    }
+
+    // Main method for testing
+    public static void main(String[] args) {
+        MultiObjectiveNSGAII instance = new MultiObjectiveNSGAII();
+        instance.runAlgorithm();
+    }
+
+    // Main method to run the the specifyed algorithm ==================================================================
+    public static double callAlgorithm(String[] args) throws IOException, InterruptedException {
+        if (args.length < 4) {
+            System.out.println("Usage: java MultiObjectiveNSGAII <BUFFER_END_TIME> <SEARCH_RADIUS_ORIGIN> <SEARCH_RADIUS_DESTINATION> <ENABLE_LOCAL_SEARCH>");
+            System.exit(1);
+        }
+
+        BUFFER_END_TIME = BUFFER_START_TIME + Double.parseDouble(args[0])*60;
+        SEARCH_RADIUS_ORIGIN = Double.parseDouble(args[1]);
+        SEARCH_RADIUS_DESTINATION = Double.parseDouble(args[2]);
+        ENABLE_LOCAL_SEARCH = Boolean.parseBoolean(args[3]);
+
+        MultiObjectiveNSGAII instance = new MultiObjectiveNSGAII();
+        return instance.runAlgorithm();
+    }
+    public double runAlgorithm() {
         // Randomly select 10% trips from the list of subTrips
-        subTrips = subTrips.stream()
+        subTrips = trips.stream()
+                .filter(trip -> trip.getDepartureTime() >= BUFFER_START_TIME && trip.getDepartureTime() < BUFFER_END_TIME) // Add the filter
                 .filter(trip -> rand.nextDouble() <= 1)
                 .collect(Collectors.toCollection(ArrayList::new));
 
@@ -149,8 +173,9 @@ public class MultiObjectiveNSGAII {
         // Find the best feasible solution at the end of GA execution without altering the original solutions heap
         SolutionFitnessPair bestFeasibleSolutionFitnessPair = findBestFeasibleSolution(population);
         int[] bestFeasibleSolution = bestFeasibleSolutionFitnessPair.getSolution();
+        double [] bestFeasibleSolutionFitness = bestFeasibleSolutionFitnessPair.getFitness();
         System.out.println("Best feasible solution: " + Arrays.toString(bestFeasibleSolution));
-        System.out.println("The fitness of the best feasible solution: " + Arrays.toString(bestFeasibleSolutionFitnessPair.getFitness()));
+        System.out.println("The fitness of the best feasible solution: " + Arrays.toString(bestFeasibleSolutionFitness));
 
 /*        // Find the best feasible solution from all generations
         SolutionFitnessPair bestFeasibleSolutionFitnessPair = findBestFeasibleSolution(new ArrayList<>(bestSolutionsAcrossGenerations));
@@ -164,12 +189,16 @@ public class MultiObjectiveNSGAII {
 
         // Print the NUMBER_OF_TRIPS_LONGER_THAN
         System.out.println("Threshold for trips longer than " + THRESHOLD_FOR_TRIPS_LONGER_THAN_STRING + ": " + NUMBER_OF_TRIPS_LONGER_TAHN);
+
+        return bestFeasibleSolutionFitness[0];
     }
 
     // GA solver with NSGA-II modifications==============================================================================
     private static List<SolutionFitnessPair> evolvePopulation(List<SolutionFitnessPair> population, int currentGeneration) {
         // Apply local search to improve the population after NSGA-II operations, and before offspring generation
-        population = localSearch(population, currentGeneration);
+        if (ENABLE_LOCAL_SEARCH) {
+            population = localSearch(population, currentGeneration);
+        }
 
         List<SolutionFitnessPair> newPop = new ArrayList<>();
 
@@ -1132,7 +1161,6 @@ public class MultiObjectiveNSGAII {
             trips = lines
                     .skip(1) // Skip header line
                     .map(MultiObjectiveNSGAII::parseTrip)
-                    .filter(trip -> trip.getDepartureTime() >= BUFFER_START_TIME && trip.getDepartureTime() < BUFFER_END_TIME) // Add the filter
                     .collect(Collectors.toList());
         } catch (IOException e) {
             e.printStackTrace();
