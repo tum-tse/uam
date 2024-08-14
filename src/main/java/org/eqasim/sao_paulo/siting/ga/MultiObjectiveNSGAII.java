@@ -45,8 +45,8 @@ public class MultiObjectiveNSGAII {
     private static final double BETA_CRUCIAL_TIME_ChANGE = - 0.1; //TODO: need to reconsider the value
     private static final double PENALTY_FOR_VEHICLE_CAPACITY_VIOLATION = -10000;
 
-    private static final long SEED = 4711; // MATSim default Random Seed
-    private static final Random rand = new Random(SEED);
+    private final long SEED = 4711; // MATSim default Random Seed
+    private final Random rand = new Random(SEED);
 
     // Parameters and constant for the UAM problem =====================================================================
     private static int FIRST_UAM_VEHICLE_ID = 1;
@@ -278,7 +278,7 @@ public class MultiObjectiveNSGAII {
     }
 
     // Selection - Tournament selection with rank and crowding distance
-    private static int[] selectParent(List<SolutionFitnessPair> population) {
+    private int[] selectParent(List<SolutionFitnessPair> population) {
         List<SolutionFitnessPair> tournament = new ArrayList<>();
         for (int i = 0; i < TOURNAMENT_SIZE; i++) {
             tournament.add(population.get(rand.nextInt(population.size())));
@@ -290,7 +290,7 @@ public class MultiObjectiveNSGAII {
 
     //TODO: consider to repair the solution if it is not feasible due to the violation of vehicle capacity constraint
     // Crossover - Single point crossover //TODO: Implement other types of crossover instead of single point
-    private static int[] crossover(int[] parent1, int[] parent2) {
+    private int[] crossover(int[] parent1, int[] parent2) {
         int[] child = new int[parent1.length];
 
         int crossoverPoint = rand.nextInt(parent1.length);
