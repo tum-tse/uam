@@ -7,10 +7,7 @@ import weka.core.Instances;
 import weka.core.Attribute;
 
 import java.util.ArrayList;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.Future;
-import java.util.concurrent.Callable;
+import java.util.concurrent.*;
 import java.util.List;
 
 public class GridSearch {
@@ -81,5 +78,6 @@ public class GridSearch {
 
         // Output the results
         System.out.println("Best fitness score: " + eval.meanAbsoluteError());
+        //System.out.println("Summary: " + eval.toSummaryString());
     }
 }
