@@ -6,6 +6,7 @@ import weka.core.Instance;
 import weka.core.Instances;
 import weka.core.Attribute;
 
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Random;
 import java.util.concurrent.ExecutorService;
@@ -30,8 +31,8 @@ public class BayesianOptimization {
     private final ParameterRange searchRadiusDestinationRange;
 
     public BayesianOptimization(ParameterRange poolingTimeWindowRange,
-                                ParameterRange searchRadiusOriginRange,
-                                ParameterRange searchRadiusDestinationRange) throws Exception {
+                                             ParameterRange searchRadiusOriginRange,
+                                             ParameterRange searchRadiusDestinationRange) throws Exception {
         this.poolingTimeWindowRange = poolingTimeWindowRange;
         this.searchRadiusOriginRange = searchRadiusOriginRange;
         this.searchRadiusDestinationRange = searchRadiusDestinationRange;
@@ -48,18 +49,22 @@ public class BayesianOptimization {
         // Initialize GaussianProcesses but don't build it yet
         gaussianProcess = new GaussianProcesses();
 
-        // Add initial data point to avoid empty dataset
-        addInitialDataPoint();
+        // Add initial data points
+        addInitialDataPoints();
     }
 
-    // Add an initial data point
-    private void addInitialDataPoint() throws Exception {
-        int poolingTimeWindow = poolingTimeWindowRange.getRandomValue(rand);
-        int searchRadiusOrigin = searchRadiusOriginRange.getRandomValue(rand);
-        int searchRadiusDestination = searchRadiusDestinationRange.getRandomValue(rand);
-        double performanceMetric = Math.random() * 100; // Example initial performance
+    // Add a fixed number of initial data points
+    private void addInitialDataPoints() throws Exception {
+        int[][] initialPoints = {
+                {poolingTimeWindowRange.getMinValue(), searchRadiusOriginRange.getMinValue(), searchRadiusDestinationRange.getMinValue()},
+                {poolingTimeWindowRange.getMaxValue(), searchRadiusOriginRange.getMaxValue(), searchRadiusDestinationRange.getMaxValue()},
+                {poolingTimeWindowRange.getMidValue(), searchRadiusOriginRange.getMidValue(), searchRadiusDestinationRange.getMidValue()}
+        };
 
-        addDataPoint(poolingTimeWindow, searchRadiusOrigin, searchRadiusDestination, performanceMetric);
+        for (int[] point : initialPoints) {
+            double performanceMetric = evaluateParameters(point[0], point[1], point[2]);
+            addDataPoint(point[0], point[1], point[2], performanceMetric);
+        }
     }
 
     // Add a new data point to the dataset
@@ -83,59 +88,71 @@ public class BayesianOptimization {
         return gaussianProcess.classifyInstance(instance);
     }
 
+    // Deterministic acquisition function (Upper Confidence Bound)
+    private double acquisitionFunction(int poolingTimeWindow, int searchRadiusOrigin, int searchRadiusDestination) throws Exception {
+        double mean = predictPerformance(poolingTimeWindow, searchRadiusOrigin, searchRadiusDestination);
+        double std = Math.sqrt(gaussianProcess.getStandardDeviation(new DenseInstance(1.0, new double[]{poolingTimeWindow, searchRadiusOrigin, searchRadiusDestination, Double.NaN})));
+        return mean + 2 * std;  // UCB with kappa = 2
+    }
+
     // Parallelized optimization method
     public int[] optimizeParameters(int iterations) throws Exception {
         AtomicReference<Double> bestPerformance = new AtomicReference<>(Double.NEGATIVE_INFINITY);
         AtomicReference<int[]> bestParams = new AtomicReference<>(new int[3]);
 
-        for (int i = 0; i < iterations; i += NUM_THREADS) {
+        for (int i = 0; i < iterations; i++) {
             List<Future<OptimizationResult>> futures = new ArrayList<>();
-            for (int j = 0; j < NUM_THREADS && i + j < iterations; j++) {
-                futures.add(executorService.submit(new Callable<OptimizationResult>() {
-                    @Override
-                    public OptimizationResult call() throws Exception {
-                        int poolingTimeWindow = poolingTimeWindowRange.getRandomValue(rand);
-                        int searchRadiusOrigin = searchRadiusOriginRange.getRandomValue(rand);
-                        int searchRadiusDestination = searchRadiusDestinationRange.getRandomValue(rand);
-
-                        double predictedPerformance = predictPerformance(poolingTimeWindow, searchRadiusOrigin, searchRadiusDestination);
-
-                        if (predictedPerformance > bestPerformance.get() || rand.nextDouble() < 0.1) {
-                            double[] actualPerformance = MultiObjectiveNSGAII.callAlgorithm(new String[]{
-                                    String.valueOf(poolingTimeWindow),
-                                    String.valueOf(searchRadiusOrigin),
-                                    String.valueOf(searchRadiusDestination),
-                                    String.valueOf(false)
-                            });
-
-                            return new OptimizationResult(poolingTimeWindow, searchRadiusOrigin, searchRadiusDestination, actualPerformance[3]);
-                        }
-                        return null;
+            for (int ptw = poolingTimeWindowRange.getMinValue(); ptw <= poolingTimeWindowRange.getMaxValue(); ptw++) {
+                for (int sro = searchRadiusOriginRange.getMinValue(); sro <= searchRadiusOriginRange.getMaxValue(); sro += 100) {
+                    for (int srd = searchRadiusDestinationRange.getMinValue(); srd <= searchRadiusDestinationRange.getMaxValue(); srd += 100) {
+                        final int finalPtw = ptw;
+                        final int finalSro = sro;
+                        final int finalSrd = srd;
+                        futures.add(executorService.submit(new Callable<OptimizationResult>() {
+                            @Override
+                            public OptimizationResult call() throws Exception {
+                                double acquisitionValue = acquisitionFunction(finalPtw, finalSro, finalSrd);
+                                return new OptimizationResult(finalPtw, finalSro, finalSrd, acquisitionValue);
+                            }
+                        }));
                     }
-                }));
+                }
             }
 
+            OptimizationResult bestResult = null;
+            double bestAcquisitionValue = Double.NEGATIVE_INFINITY;
+
             for (Future<OptimizationResult> future : futures) {
-                try {
-                    OptimizationResult result = future.get(); // Wait for each task to complete
-                    if (result != null) {
-                        synchronized (this) {
-                            addDataPoint(result.poolingTimeWindow, result.searchRadiusOrigin, result.searchRadiusDestination, result.performance);
-                            if (result.performance > bestPerformance.get()) {
-                                bestPerformance.set(result.performance);
-                                bestParams.set(new int[]{result.poolingTimeWindow, result.searchRadiusOrigin, result.searchRadiusDestination});
-                            }
-                        }
-                    }
-                } catch (Exception e) {
-                    System.err.println("Error in optimization thread: " + e.getMessage());
-                    // Optionally, you might want to break the loop or take other actions here
+                OptimizationResult result = future.get();
+                if (result.performance > bestAcquisitionValue) {
+                    bestResult = result;
+                    bestAcquisitionValue = result.performance;
+                }
+            }
+
+            if (bestResult != null) {
+                double actualPerformance = evaluateParameters(bestResult.poolingTimeWindow, bestResult.searchRadiusOrigin, bestResult.searchRadiusDestination);
+                addDataPoint(bestResult.poolingTimeWindow, bestResult.searchRadiusOrigin, bestResult.searchRadiusDestination, actualPerformance);
+
+                if (actualPerformance > bestPerformance.get()) {
+                    bestPerformance.set(actualPerformance);
+                    bestParams.set(new int[]{bestResult.poolingTimeWindow, bestResult.searchRadiusOrigin, bestResult.searchRadiusDestination});
                 }
             }
         }
 
         executorService.shutdown();
         return bestParams.get();
+    }
+
+    private double evaluateParameters(int poolingTimeWindow, int searchRadiusOrigin, int searchRadiusDestination) throws IOException, InterruptedException {
+        double[] actualPerformance = MultiObjectiveNSGAII.callAlgorithm(new String[]{
+                String.valueOf(poolingTimeWindow),
+                String.valueOf(searchRadiusOrigin),
+                String.valueOf(searchRadiusDestination),
+                String.valueOf(false)
+        });
+        return actualPerformance[3];
     }
 
     private static class OptimizationResult {
@@ -161,8 +178,16 @@ public class BayesianOptimization {
             this.max = max;
         }
 
-        public int getRandomValue(Random rand) {
-            return rand.nextInt(max - min + 1) + min;
+        public int getMinValue() {
+            return min;
+        }
+
+        public int getMaxValue() {
+            return max;
+        }
+
+        public int getMidValue() {
+            return min + (max - min) / 2;
         }
     }
 
@@ -174,7 +199,7 @@ public class BayesianOptimization {
         BayesianOptimization optimization = new BayesianOptimization(
                 poolingTimeWindowRange, searchRadiusOriginRange, searchRadiusDestinationRange);
 
-        int[] bestParams = optimization.optimizeParameters(100);
+        int[] bestParams = optimization.optimizeParameters(10);
         System.out.println("Best Parameters: Pooling Time Window = " + bestParams[0] +
                 ", Search Radius Origin = " + bestParams[1] +
                 ", Search Radius Destination = " + bestParams[2]);
