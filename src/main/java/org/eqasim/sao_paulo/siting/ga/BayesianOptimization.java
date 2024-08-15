@@ -25,7 +25,17 @@ public class BayesianOptimization {
     private final ExecutorService executorService = Executors.newFixedThreadPool(NUM_THREADS);
 
     // Initialize with empty dataset
-    public BayesianOptimization() throws Exception {
+    private final ParameterRange poolingTimeWindowRange;
+    private final ParameterRange searchRadiusOriginRange;
+    private final ParameterRange searchRadiusDestinationRange;
+
+    public BayesianOptimization(ParameterRange poolingTimeWindowRange,
+                                        ParameterRange searchRadiusOriginRange,
+                                        ParameterRange searchRadiusDestinationRange) throws Exception {
+        this.poolingTimeWindowRange = poolingTimeWindowRange;
+        this.searchRadiusOriginRange = searchRadiusOriginRange;
+        this.searchRadiusDestinationRange = searchRadiusDestinationRange;
+
         ArrayList<Attribute> attributes = new ArrayList<>();
         attributes.add(new Attribute("pooling_time_window"));
         attributes.add(new Attribute("search_radius_origin"));
@@ -44,9 +54,9 @@ public class BayesianOptimization {
 
     // Add an initial data point
     private void addInitialDataPoint() throws Exception {
-        double poolingTimeWindow = rand.nextDouble() * 100; // Example initial value
-        double searchRadiusOrigin = rand.nextDouble() * 5000; // Example initial value
-        double searchRadiusDestination = rand.nextDouble() * 5000; // Example initial value
+        double poolingTimeWindow = poolingTimeWindowRange.getRandomValue(rand);
+        double searchRadiusOrigin = searchRadiusOriginRange.getRandomValue(rand);
+        double searchRadiusDestination = searchRadiusDestinationRange.getRandomValue(rand);
         double performanceMetric = Math.random() * 100; // Example initial performance
 
         addDataPoint(poolingTimeWindow, searchRadiusOrigin, searchRadiusDestination, performanceMetric);
@@ -84,9 +94,9 @@ public class BayesianOptimization {
                 futures.add(executorService.submit(new Callable<OptimizationResult>() {
                     @Override
                     public OptimizationResult call() throws Exception {
-                        double poolingTimeWindow = rand.nextDouble() * 15; // Example range
-                        double searchRadiusOrigin = rand.nextDouble() * 5000; // Example range
-                        double searchRadiusDestination = rand.nextDouble() * 5000; // Example range
+                        double poolingTimeWindow = poolingTimeWindowRange.getRandomValue(rand);
+                        double searchRadiusOrigin = searchRadiusOriginRange.getRandomValue(rand);
+                        double searchRadiusDestination = searchRadiusDestinationRange.getRandomValue(rand);
 
                         double predictedPerformance = predictPerformance(poolingTimeWindow, searchRadiusOrigin, searchRadiusDestination);
 
@@ -142,9 +152,28 @@ public class BayesianOptimization {
         }
     }
 
-    // Main method for testing
+    public static class ParameterRange {
+        private final double min;
+        private final double max;
+
+        public ParameterRange(double min, double max) {
+            this.min = min;
+            this.max = max;
+        }
+
+        public double getRandomValue(Random rand) {
+            return min + (max - min) * rand.nextDouble();
+        }
+    }
+
     public static void main(String[] args) throws Exception {
-        BayesianOptimization optimization = new BayesianOptimization();
+        ParameterRange poolingTimeWindowRange = new ParameterRange(0, 15);
+        ParameterRange searchRadiusOriginRange = new ParameterRange(0, 5000);
+        ParameterRange searchRadiusDestinationRange = new ParameterRange(0, 5000);
+
+        BayesianOptimization optimization = new BayesianOptimization(
+                poolingTimeWindowRange, searchRadiusOriginRange, searchRadiusDestinationRange);
+
         double[] bestParams = optimization.optimizeParameters(50);
         System.out.println("Best Parameters: Pooling Time Window = " + bestParams[0] +
                 ", Search Radius Origin = " + bestParams[1] +
