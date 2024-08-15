@@ -15,8 +15,12 @@ import java.util.concurrent.Future;
 import java.util.concurrent.Callable;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.logging.Logger;
+import java.util.logging.Level;
 
 public class BayesianOptimization {
+
+    private static final Logger LOGGER = Logger.getLogger(BayesianOptimization.class.getName());
 
     private GaussianProcesses gaussianProcess;
     private Instances dataset;
@@ -31,8 +35,8 @@ public class BayesianOptimization {
     private final ParameterRange searchRadiusDestinationRange;
 
     public BayesianOptimization(ParameterRange poolingTimeWindowRange,
-                                             ParameterRange searchRadiusOriginRange,
-                                             ParameterRange searchRadiusDestinationRange) throws Exception {
+                                ParameterRange searchRadiusOriginRange,
+                                ParameterRange searchRadiusDestinationRange) throws Exception {
         this.poolingTimeWindowRange = poolingTimeWindowRange;
         this.searchRadiusOriginRange = searchRadiusOriginRange;
         this.searchRadiusDestinationRange = searchRadiusDestinationRange;
@@ -61,9 +65,19 @@ public class BayesianOptimization {
                 {poolingTimeWindowRange.getMidValue(), searchRadiusOriginRange.getMidValue(), searchRadiusDestinationRange.getMidValue()}
         };
 
+        int successfulPoints = 0;
         for (int[] point : initialPoints) {
-            double performanceMetric = evaluateParameters(point[0], point[1], point[2]);
-            addDataPoint(point[0], point[1], point[2], performanceMetric);
+            try {
+                double performanceMetric = evaluateParameters(point[0], point[1], point[2]);
+                addDataPoint(point[0], point[1], point[2], performanceMetric);
+                successfulPoints++;
+            } catch (IllegalStateException e) {
+                LOGGER.warning("Failed to evaluate initial point: " + e.getMessage());
+            }
+        }
+
+        if (successfulPoints == 0) {
+            throw new IllegalStateException("Failed to evaluate any initial points. Check parameter ranges and constraints.");
         }
     }
 
@@ -103,16 +117,21 @@ public class BayesianOptimization {
         for (int i = 0; i < iterations; i++) {
             List<Future<OptimizationResult>> futures = new ArrayList<>();
             for (int ptw = poolingTimeWindowRange.getMinValue(); ptw <= poolingTimeWindowRange.getMaxValue(); ptw++) {
-                for (int sro = searchRadiusOriginRange.getMinValue(); sro <= searchRadiusOriginRange.getMaxValue(); sro += 100) {
-                    for (int srd = searchRadiusDestinationRange.getMinValue(); srd <= searchRadiusDestinationRange.getMaxValue(); srd += 100) {
+                for (int sro = searchRadiusOriginRange.getMinValue(); sro <= searchRadiusOriginRange.getMaxValue(); sro += 1000) {
+                    for (int srd = searchRadiusDestinationRange.getMinValue(); srd <= searchRadiusDestinationRange.getMaxValue(); srd += 1000) {
                         final int finalPtw = ptw;
                         final int finalSro = sro;
                         final int finalSrd = srd;
                         futures.add(executorService.submit(new Callable<OptimizationResult>() {
                             @Override
                             public OptimizationResult call() throws Exception {
-                                double acquisitionValue = acquisitionFunction(finalPtw, finalSro, finalSrd);
-                                return new OptimizationResult(finalPtw, finalSro, finalSrd, acquisitionValue);
+                                try {
+                                    double acquisitionValue = acquisitionFunction(finalPtw, finalSro, finalSrd);
+                                    return new OptimizationResult(finalPtw, finalSro, finalSrd, acquisitionValue);
+                                } catch (Exception e) {
+                                    LOGGER.warning("Failed to evaluate point (" + finalPtw + ", " + finalSro + ", " + finalSrd + "): " + e.getMessage());
+                                    return null;
+                                }
                             }
                         }));
                     }
@@ -124,20 +143,27 @@ public class BayesianOptimization {
 
             for (Future<OptimizationResult> future : futures) {
                 OptimizationResult result = future.get();
-                if (result.performance > bestAcquisitionValue) {
+                if (result != null && result.performance > bestAcquisitionValue) {
                     bestResult = result;
                     bestAcquisitionValue = result.performance;
                 }
             }
 
             if (bestResult != null) {
-                double actualPerformance = evaluateParameters(bestResult.poolingTimeWindow, bestResult.searchRadiusOrigin, bestResult.searchRadiusDestination);
-                addDataPoint(bestResult.poolingTimeWindow, bestResult.searchRadiusOrigin, bestResult.searchRadiusDestination, actualPerformance);
+                try {
+                    double actualPerformance = evaluateParameters(bestResult.poolingTimeWindow, bestResult.searchRadiusOrigin, bestResult.searchRadiusDestination);
+                    addDataPoint(bestResult.poolingTimeWindow, bestResult.searchRadiusOrigin, bestResult.searchRadiusDestination, actualPerformance);
 
-                if (actualPerformance > bestPerformance.get()) {
-                    bestPerformance.set(actualPerformance);
-                    bestParams.set(new int[]{bestResult.poolingTimeWindow, bestResult.searchRadiusOrigin, bestResult.searchRadiusDestination});
+                    if (actualPerformance > bestPerformance.get()) {
+                        bestPerformance.set(actualPerformance);
+                        bestParams.set(new int[]{bestResult.poolingTimeWindow, bestResult.searchRadiusOrigin, bestResult.searchRadiusDestination});
+                    }
+                    LOGGER.info("Iteration " + i + ": Best performance so far: " + bestPerformance.get());
+                } catch (IllegalStateException e) {
+                    LOGGER.warning("Failed to evaluate best point in iteration " + i + ": " + e.getMessage());
                 }
+            } else {
+                LOGGER.warning("No valid point found in iteration " + i);
             }
         }
 
@@ -191,17 +217,21 @@ public class BayesianOptimization {
         }
     }
 
-    public static void main(String[] args) throws Exception {
-        ParameterRange poolingTimeWindowRange = new ParameterRange(5, 15);
-        ParameterRange searchRadiusOriginRange = new ParameterRange(0, 5000);
-        ParameterRange searchRadiusDestinationRange = new ParameterRange(0, 5000);
+    public static void main(String[] args) {
+        try {
+            ParameterRange poolingTimeWindowRange = new ParameterRange(5, 15);
+            ParameterRange searchRadiusOriginRange = new ParameterRange(1000, 5000);
+            ParameterRange searchRadiusDestinationRange = new ParameterRange(1000, 5000);
 
-        BayesianOptimization optimization = new BayesianOptimization(
-                poolingTimeWindowRange, searchRadiusOriginRange, searchRadiusDestinationRange);
+            BayesianOptimization optimization = new BayesianOptimization(
+                    poolingTimeWindowRange, searchRadiusOriginRange, searchRadiusDestinationRange);
 
-        int[] bestParams = optimization.optimizeParameters(10);
-        System.out.println("Best Parameters: Pooling Time Window = " + bestParams[0] +
-                ", Search Radius Origin = " + bestParams[1] +
-                ", Search Radius Destination = " + bestParams[2]);
+            int[] bestParams = optimization.optimizeParameters(10);
+            System.out.println("Best Parameters: Pooling Time Window = " + bestParams[0] +
+                    ", Search Radius Origin = " + bestParams[1] +
+                    ", Search Radius Destination = " + bestParams[2]);
+        } catch (Exception e) {
+            LOGGER.log(Level.SEVERE, "An error occurred during optimization", e);
+        }
     }
 }
