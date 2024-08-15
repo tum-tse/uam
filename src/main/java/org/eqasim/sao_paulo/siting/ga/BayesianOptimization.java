@@ -8,6 +8,12 @@ import weka.core.Attribute;
 
 import java.util.ArrayList;
 import java.util.Random;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.Callable;
+import java.util.List;
+import java.util.concurrent.atomic.AtomicReference;
 
 public class BayesianOptimization {
 
@@ -15,6 +21,8 @@ public class BayesianOptimization {
     private Instances dataset;
     private final long SEED = 4711; // MATSim default Random Seed
     private final Random rand = new Random(SEED);
+    private final int NUM_THREADS = Runtime.getRuntime().availableProcessors();
+    private final ExecutorService executorService = Executors.newFixedThreadPool(NUM_THREADS);
 
     // Initialize with empty dataset
     public BayesianOptimization() throws Exception {
@@ -32,6 +40,16 @@ public class BayesianOptimization {
 
         // Add initial data point to avoid empty dataset
         addInitialDataPoint();
+    }
+
+    // Add an initial data point
+    private void addInitialDataPoint() throws Exception {
+        double poolingTimeWindow = rand.nextDouble() * 100; // Example initial value
+        double searchRadiusOrigin = rand.nextDouble() * 5000; // Example initial value
+        double searchRadiusDestination = rand.nextDouble() * 5000; // Example initial value
+        double performanceMetric = Math.random() * 100; // Example initial performance
+
+        addDataPoint(poolingTimeWindow, searchRadiusOrigin, searchRadiusDestination, performanceMetric);
     }
 
     // Add a new data point to the dataset
@@ -55,61 +73,55 @@ public class BayesianOptimization {
         return gaussianProcess.classifyInstance(instance);
     }
 
-    // Optimize parameters
+    // Parallelized optimization method
     public double[] optimizeParameters(int iterations) throws Exception {
-        double bestPerformance = Double.NEGATIVE_INFINITY;
-        double[] bestParams = new double[3];
+        AtomicReference<Double> bestPerformance = new AtomicReference<>(Double.NEGATIVE_INFINITY);
+        AtomicReference<double[]> bestParams = new AtomicReference<>(new double[3]);
 
-        for (int i = 0; i < iterations; i++) {
-            double poolingTimeWindow = rand.nextDouble() * 15; // Example range
-            double searchRadiusOrigin = rand.nextDouble() * 5000; // Example range
-            double searchRadiusDestination = rand.nextDouble() * 5000; // Example range
+        for (int i = 0; i < iterations; i += NUM_THREADS) {
+            List<Future<Void>> futures = new ArrayList<>();
+            for (int j = 0; j < NUM_THREADS && i + j < iterations; j++) {
+                futures.add(executorService.submit(new Callable<Void>() {
+                    @Override
+                    public Void call() throws Exception {
+                        double poolingTimeWindow = rand.nextDouble() * 15; // Example range
+                        double searchRadiusOrigin = rand.nextDouble() * 5000; // Example range
+                        double searchRadiusDestination = rand.nextDouble() * 5000; // Example range
 
-            // Predict performance
-            double predictedPerformance = predictPerformance(poolingTimeWindow, searchRadiusOrigin, searchRadiusDestination);
+                        double predictedPerformance = predictPerformance(poolingTimeWindow, searchRadiusOrigin, searchRadiusDestination);
 
-            // Introduce an exploration-exploitation tradeoff by evaluating the predicted performance
-            if (predictedPerformance > bestPerformance || rand.nextDouble() < 0.1) {
-                // Evaluate the algorithm with these parameters
-                double[] actualPerformance = MultiObjectiveNSGAII.callAlgorithm(new String[]{
-                        String.valueOf(poolingTimeWindow),
-                        String.valueOf(searchRadiusOrigin),
-                        String.valueOf(searchRadiusDestination),
-                        String.valueOf(false)
-                });
+                        if (predictedPerformance > bestPerformance.get() || rand.nextDouble() < 0.1) {
+                            double[] actualPerformance = MultiObjectiveNSGAII.callAlgorithm(new String[]{
+                                    String.valueOf(poolingTimeWindow),
+                                    String.valueOf(searchRadiusOrigin),
+                                    String.valueOf(searchRadiusDestination),
+                                    String.valueOf(false)
+                            });
 
-                // Add to the dataset
-                addDataPoint(poolingTimeWindow, searchRadiusOrigin, searchRadiusDestination, actualPerformance[3]);
+                            synchronized (BayesianOptimization.this) {
+                                addDataPoint(poolingTimeWindow, searchRadiusOrigin, searchRadiusDestination, actualPerformance[3]);
+                            }
 
-                // Check if this is the best performance
-                if (actualPerformance[3] > bestPerformance) {
-                    bestPerformance = actualPerformance[3];
-                    bestParams[0] = poolingTimeWindow;
-                    bestParams[1] = searchRadiusOrigin;
-                    bestParams[2] = searchRadiusDestination;
-                }
+                            if (actualPerformance[3] > bestPerformance.get()) {
+                                bestPerformance.set(actualPerformance[3]);
+                                bestParams.set(new double[]{poolingTimeWindow, searchRadiusOrigin, searchRadiusDestination});
+                            }
+                        }
+                        return null;
+                    }
+                }));
+            }
+
+            for (Future<Void> future : futures) {
+                future.get(); // Wait for all tasks to complete
             }
         }
 
-        return bestParams;
+        executorService.shutdown();
+        return bestParams.get();
     }
 
-    // Add an initial data point
-    private void addInitialDataPoint() throws Exception {
-        double poolingTimeWindow = rand.nextDouble() * 100; // Example initial value
-        double searchRadiusOrigin = rand.nextDouble() * 5000; // Example initial value
-        double searchRadiusDestination = rand.nextDouble() * 5000; // Example initial value
-        double performanceMetric = Math.random() * 100; // Example initial performance
-
-        addDataPoint(poolingTimeWindow, searchRadiusOrigin, searchRadiusDestination, performanceMetric);
-    }
-
-    // Dummy implementation of the callAlgorithm method, replace with actual implementation
-    public double[] callAlgorithm(String[] args) {
-        // This is just a placeholder. Replace with your algorithm's actual execution
-        return new double[]{0, 0, 0, Math.random() * 100};
-    }
-
+    // Main method for testing
     public static void main(String[] args) throws Exception {
         BayesianOptimization optimization = new BayesianOptimization();
         double[] bestParams = optimization.optimizeParameters(50);
