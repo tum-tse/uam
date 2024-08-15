@@ -40,8 +40,8 @@ public class MultiObjectiveNSGAII {
     private static final int TOURNAMENT_SIZE = 5; // Tournament size for selection
     private static boolean ENABLE_LOCAL_SEARCH = true; // Enable local search after each generation
 
-    private static final double ALPHA = - 100; // Weight for changed flight distances
-    private static final double BETA = - 1; // Weight for change in travel time
+    private static final double ALPHA = - 2.02 * 0.9101 / 1000; // Weight for changed flight distances
+    private static final double BETA = - (double) 64 / 3600; // Weight for change in travel time
     private static final double BETA_CRUCIAL_TIME_ChANGE = - 0.1; //TODO: need to reconsider the value
     private static final double PENALTY_FOR_VEHICLE_CAPACITY_VIOLATION = -10000;
 
@@ -187,13 +187,13 @@ public class MultiObjectiveNSGAII {
         System.out.println("The fitness of the best feasible solution: " + Arrays.toString(bestFeasibleSolutionFitnessPair.getFitness()));*/
 
         // Calculate and print the performance indicators
-        calculateFitness(bestFeasibleSolution, true);
-        printPerformanceIndicators(bestFeasibleSolution, "src/main/java/org/eqasim/sao_paulo/siting/ga/trip_statistics.csv");
+        SolutionFitnessPair finalSolution = calculateFitness(bestFeasibleSolution, true);
+        //printPerformanceIndicators(bestFeasibleSolution, "src/main/java/org/eqasim/sao_paulo/siting/ga/trip_statistics.csv");
 
         // Print the NUMBER_OF_TRIPS_LONGER_THAN
         //System.out.println("Threshold for trips longer than " + THRESHOLD_FOR_TRIPS_LONGER_THAN_STRING + ": " + NUMBER_OF_TRIPS_LONGER_TAHN);
 
-        return new double[]{BUFFER_END_TIME, SEARCH_RADIUS_ORIGIN, SEARCH_RADIUS_DESTINATION, bestFeasibleSolutionFitness[0]/subTrips.size()};
+        return new double[]{BUFFER_END_TIME, SEARCH_RADIUS_ORIGIN, SEARCH_RADIUS_DESTINATION, finalSolution.getFitness()[0]};
     }
 
     // GA solver with NSGA-II modifications==============================================================================
