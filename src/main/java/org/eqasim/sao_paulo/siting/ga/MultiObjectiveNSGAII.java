@@ -885,7 +885,7 @@ public class MultiObjectiveNSGAII {
                 return solutionPair;
             }
         }
-        int[] quickFixedSolution = quickFixInfeasibleSolutions(bestSolutionButMaybeInfeasible.getSolution());
+        int[] quickFixedSolution = guaranteeFeasibleSolution(bestSolutionButMaybeInfeasible.getSolution());
         return new SolutionFitnessPair(quickFixedSolution, calculateFitness(quickFixedSolution, false).getFitness());
         //throw new IllegalStateException("No feasible solution found in the entire population");
     }
@@ -909,39 +909,86 @@ public class MultiObjectiveNSGAII {
         return isFeasible;
     }
 
-    public int[] quickFixInfeasibleSolutions(int[] solution) {
-        Map<Integer, List<Integer>> vehicleAssignments = new HashMap<>();
+    public int[] guaranteeFeasibleSolution(int[] solution) {
+        boolean isSolutionFeasible = false;
+        int iterationCount = 0;
+        final int MAX_ITERATIONS = 1000; // Prevent infinite loops
 
-        // Group trips by assigned vehicle
-        for (int i = 0; i < solution.length; i++) {
-            int vehicleId = solution[i];
-            vehicleAssignments.computeIfAbsent(vehicleId, k -> new ArrayList<>()).add(i);
-        }
+        while (!isSolutionFeasible && iterationCount < MAX_ITERATIONS) {
+            Map<Integer, List<Integer>> vehicleAssignments = new HashMap<>();
 
-        // Identify and fix overloaded vehicles
-        for (Map.Entry<Integer, List<Integer>> entry : vehicleAssignments.entrySet()) {
-            int vehicleId = entry.getKey();
-            List<Integer> assignedTrips = entry.getValue();
+            // Group trips by assigned vehicle
+            for (int i = 0; i < solution.length; i++) {
+                int vehicleId = solution[i];
+                vehicleAssignments.computeIfAbsent(vehicleId, k -> new ArrayList<>()).add(i);
+            }
 
-            if (assignedTrips.size() > VEHICLE_CAPACITY) {
-                // Sort trips by arrival time at the station
-                assignedTrips.sort((a, b) -> {
-                    UAMTrip tripA = subTrips.get(a);
-                    UAMTrip tripB = subTrips.get(b);
-                    UAMStation stationA = vehicleOriginStationMap.get(Id.create(String.valueOf(vehicleId), DvrpVehicle.class));
-                    UAMStation stationB = vehicleOriginStationMap.get(Id.create(String.valueOf(vehicleId), DvrpVehicle.class));
-                    double arrivalTimeA = tripA.getDepartureTime() + tripA.calculateAccessTeleportationTime(stationA);
-                    double arrivalTimeB = tripB.getDepartureTime() + tripB.calculateAccessTeleportationTime(stationB);
-                    return Double.compare(arrivalTimeA, arrivalTimeB);
-                });
+            boolean changesApplied = false;
 
-                // Reassign extra trips
-                for (int i = VEHICLE_CAPACITY; i < assignedTrips.size(); i++) {
-                    int tripIndex = assignedTrips.get(i);
-                    assignAvailableVehicle(tripIndex, solution);
+            // Identify and fix overloaded vehicles
+            for (Map.Entry<Integer, List<Integer>> entry : vehicleAssignments.entrySet()) {
+                int vehicleId = entry.getKey();
+                List<Integer> assignedTrips = entry.getValue();
+
+                if (assignedTrips.size() > VEHICLE_CAPACITY) {
+                    // Sort trips by arrival time at the station
+                    assignedTrips.sort((a, b) -> {
+                        UAMTrip tripA = subTrips.get(a);
+                        UAMTrip tripB = subTrips.get(b);
+                        UAMStation station = vehicleOriginStationMap.get(Id.create(String.valueOf(vehicleId), DvrpVehicle.class));
+                        double arrivalTimeA = tripA.getDepartureTime() + tripA.calculateAccessTeleportationTime(station);
+                        double arrivalTimeB = tripB.getDepartureTime() + tripB.calculateAccessTeleportationTime(station);
+                        return Double.compare(arrivalTimeA, arrivalTimeB);
+                    });
+
+                    // Reassign extra trips
+                    for (int i = VEHICLE_CAPACITY; i < assignedTrips.size(); i++) {
+                        int tripIndex = assignedTrips.get(i);
+                        UAMTrip trip = subTrips.get(tripIndex);
+                        int oldVehicleId = solution[tripIndex];
+
+                        // Check if all available vehicles are at capacity
+                        List<UAMVehicle> availableVehicles = tripVehicleMap.get(trip.getTripId());
+                        boolean allVehiclesAtCapacity = availableVehicles.stream()
+                                .allMatch(v -> vehicleAssignments.getOrDefault(Integer.parseInt(v.getId().toString()), Collections.emptyList()).size() >= VEHICLE_CAPACITY);
+
+                        if (allVehiclesAtCapacity) {
+                            // Create a new vehicle for this trip
+                            UAMVehicle newVehicle = feedDataForVehicleCreation(trip, false);
+                            availableVehicles.add(newVehicle);
+                            tripVehicleMap.put(trip.getTripId(), availableVehicles);
+
+                            // Assign the trip to the new vehicle
+                            solution[tripIndex] = Integer.parseInt(newVehicle.getId().toString());
+                        } else {
+                            // Assign to an available vehicle that's not at capacity
+                            assignAvailableVehicle(tripIndex, solution);
+                        }
+
+                        if (solution[tripIndex] != oldVehicleId) {
+                            changesApplied = true;
+                        }
+                    }
                 }
             }
+
+            // Check if the solution is now feasible
+            isSolutionFeasible = isFeasible(solution, false);
+
+            // If no changes were applied but the solution is still infeasible,
+            // we need to break out to avoid an infinite loop
+            if (!changesApplied && !isSolutionFeasible) {
+                break;
+            }
+
+            iterationCount++;
         }
+
+        // Check whether we could find a feasible solution
+        if (!isSolutionFeasible) {
+            throw new IllegalArgumentException("Error: Could not find a feasible solution.");
+        }
+
         return solution;
     }
 
