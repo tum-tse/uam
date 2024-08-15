@@ -869,12 +869,13 @@ public class MultiObjectiveNSGAII {
     }
 
     // Method to find the first feasible solution from the priority queue without altering the original heap
-    private static SolutionFitnessPair findBestFeasibleSolution(List<SolutionFitnessPair> population) {
+    private SolutionFitnessPair findBestFeasibleSolution(List<SolutionFitnessPair> population) {
         // Create a new priority queue that is a copy of the original but sorted in descending order by fitness
         PriorityQueue<SolutionFitnessPair> solutionsHeapCopy = new PriorityQueue<>(
                 Comparator.comparingDouble((SolutionFitnessPair p) -> p.getFitness()[0]).reversed()
         );
         solutionsHeapCopy.addAll(population);
+        SolutionFitnessPair bestSolutionButMaybeInfeasible = solutionsHeapCopy.peek();
 
         // Iterate through the copied solutions heap to find a feasible solution
         while (!solutionsHeapCopy.isEmpty()) {
@@ -884,7 +885,9 @@ public class MultiObjectiveNSGAII {
                 return solutionPair;
             }
         }
-        throw new IllegalStateException("No feasible solution found in the entire population");
+        int[] quickFixedSolution = quickFixInfeasibleSolutions(bestSolutionButMaybeInfeasible.getSolution());
+        return new SolutionFitnessPair(quickFixedSolution, calculateFitness(quickFixedSolution, false).getFitness());
+        //throw new IllegalStateException("No feasible solution found in the entire population");
     }
     // Helper method to check if a solution violates vehicle capacity constraints
     private static boolean isFeasible(int[] solution, boolean isPrintCapacityViolation) {
@@ -904,6 +907,42 @@ public class MultiObjectiveNSGAII {
             System.out.println("Number of vehicles with capacity violation: " + vehicleCapacityViolated);
         }
         return isFeasible;
+    }
+
+    public int[] quickFixInfeasibleSolutions(int[] solution) {
+        Map<Integer, List<Integer>> vehicleAssignments = new HashMap<>();
+
+        // Group trips by assigned vehicle
+        for (int i = 0; i < solution.length; i++) {
+            int vehicleId = solution[i];
+            vehicleAssignments.computeIfAbsent(vehicleId, k -> new ArrayList<>()).add(i);
+        }
+
+        // Identify and fix overloaded vehicles
+        for (Map.Entry<Integer, List<Integer>> entry : vehicleAssignments.entrySet()) {
+            int vehicleId = entry.getKey();
+            List<Integer> assignedTrips = entry.getValue();
+
+            if (assignedTrips.size() > VEHICLE_CAPACITY) {
+                // Sort trips by arrival time at the station
+                assignedTrips.sort((a, b) -> {
+                    UAMTrip tripA = subTrips.get(a);
+                    UAMTrip tripB = subTrips.get(b);
+                    UAMStation stationA = vehicleOriginStationMap.get(Id.create(String.valueOf(vehicleId), DvrpVehicle.class));
+                    UAMStation stationB = vehicleOriginStationMap.get(Id.create(String.valueOf(vehicleId), DvrpVehicle.class));
+                    double arrivalTimeA = tripA.getDepartureTime() + tripA.calculateAccessTeleportationTime(stationA);
+                    double arrivalTimeB = tripB.getDepartureTime() + tripB.calculateAccessTeleportationTime(stationB);
+                    return Double.compare(arrivalTimeA, arrivalTimeB);
+                });
+
+                // Reassign extra trips
+                for (int i = VEHICLE_CAPACITY; i < assignedTrips.size(); i++) {
+                    int tripIndex = assignedTrips.get(i);
+                    assignAvailableVehicle(tripIndex, solution);
+                }
+            }
+        }
+        return solution;
     }
 
     // Performance indicators ==========================================================================================
