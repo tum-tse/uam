@@ -30,8 +30,8 @@ public class BayesianOptimization {
     private final ParameterRange searchRadiusDestinationRange;
 
     public BayesianOptimization(ParameterRange poolingTimeWindowRange,
-                                        ParameterRange searchRadiusOriginRange,
-                                        ParameterRange searchRadiusDestinationRange) throws Exception {
+                                ParameterRange searchRadiusOriginRange,
+                                ParameterRange searchRadiusDestinationRange) throws Exception {
         this.poolingTimeWindowRange = poolingTimeWindowRange;
         this.searchRadiusOriginRange = searchRadiusOriginRange;
         this.searchRadiusDestinationRange = searchRadiusDestinationRange;
@@ -54,16 +54,16 @@ public class BayesianOptimization {
 
     // Add an initial data point
     private void addInitialDataPoint() throws Exception {
-        double poolingTimeWindow = poolingTimeWindowRange.getRandomValue(rand);
-        double searchRadiusOrigin = searchRadiusOriginRange.getRandomValue(rand);
-        double searchRadiusDestination = searchRadiusDestinationRange.getRandomValue(rand);
+        int poolingTimeWindow = poolingTimeWindowRange.getRandomValue(rand);
+        int searchRadiusOrigin = searchRadiusOriginRange.getRandomValue(rand);
+        int searchRadiusDestination = searchRadiusDestinationRange.getRandomValue(rand);
         double performanceMetric = Math.random() * 100; // Example initial performance
 
         addDataPoint(poolingTimeWindow, searchRadiusOrigin, searchRadiusDestination, performanceMetric);
     }
 
     // Add a new data point to the dataset
-    public void addDataPoint(double poolingTimeWindow, double searchRadiusOrigin, double searchRadiusDestination, double performanceMetric) throws Exception {
+    public void addDataPoint(int poolingTimeWindow, int searchRadiusOrigin, int searchRadiusDestination, double performanceMetric) throws Exception {
         double[] values = new double[]{poolingTimeWindow, searchRadiusOrigin, searchRadiusDestination, performanceMetric};
         Instance instance = new DenseInstance(1.0, values);
         dataset.add(instance);
@@ -73,7 +73,7 @@ public class BayesianOptimization {
     }
 
     // Predict performance for a given set of parameters
-    public double predictPerformance(double poolingTimeWindow, double searchRadiusOrigin, double searchRadiusDestination) throws Exception {
+    public double predictPerformance(int poolingTimeWindow, int searchRadiusOrigin, int searchRadiusDestination) throws Exception {
         if (dataset.numInstances() == 0) {
             throw new IllegalStateException("Cannot predict performance without any training data.");
         }
@@ -84,9 +84,9 @@ public class BayesianOptimization {
     }
 
     // Parallelized optimization method
-    public double[] optimizeParameters(int iterations) throws Exception {
+    public int[] optimizeParameters(int iterations) throws Exception {
         AtomicReference<Double> bestPerformance = new AtomicReference<>(Double.NEGATIVE_INFINITY);
-        AtomicReference<double[]> bestParams = new AtomicReference<>(new double[3]);
+        AtomicReference<int[]> bestParams = new AtomicReference<>(new int[3]);
 
         for (int i = 0; i < iterations; i += NUM_THREADS) {
             List<Future<OptimizationResult>> futures = new ArrayList<>();
@@ -94,9 +94,9 @@ public class BayesianOptimization {
                 futures.add(executorService.submit(new Callable<OptimizationResult>() {
                     @Override
                     public OptimizationResult call() throws Exception {
-                        double poolingTimeWindow = poolingTimeWindowRange.getRandomValue(rand);
-                        double searchRadiusOrigin = searchRadiusOriginRange.getRandomValue(rand);
-                        double searchRadiusDestination = searchRadiusDestinationRange.getRandomValue(rand);
+                        int poolingTimeWindow = poolingTimeWindowRange.getRandomValue(rand);
+                        int searchRadiusOrigin = searchRadiusOriginRange.getRandomValue(rand);
+                        int searchRadiusDestination = searchRadiusDestinationRange.getRandomValue(rand);
 
                         double predictedPerformance = predictPerformance(poolingTimeWindow, searchRadiusOrigin, searchRadiusDestination);
 
@@ -123,7 +123,7 @@ public class BayesianOptimization {
                             addDataPoint(result.poolingTimeWindow, result.searchRadiusOrigin, result.searchRadiusDestination, result.performance);
                             if (result.performance > bestPerformance.get()) {
                                 bestPerformance.set(result.performance);
-                                bestParams.set(new double[]{result.poolingTimeWindow, result.searchRadiusOrigin, result.searchRadiusDestination});
+                                bestParams.set(new int[]{result.poolingTimeWindow, result.searchRadiusOrigin, result.searchRadiusDestination});
                             }
                         }
                     }
@@ -139,12 +139,12 @@ public class BayesianOptimization {
     }
 
     private static class OptimizationResult {
-        final double poolingTimeWindow;
-        final double searchRadiusOrigin;
-        final double searchRadiusDestination;
+        final int poolingTimeWindow;
+        final int searchRadiusOrigin;
+        final int searchRadiusDestination;
         final double performance;
 
-        OptimizationResult(double ptw, double sro, double srd, double perf) {
+        OptimizationResult(int ptw, int sro, int srd, double perf) {
             poolingTimeWindow = ptw;
             searchRadiusOrigin = sro;
             searchRadiusDestination = srd;
@@ -153,16 +153,16 @@ public class BayesianOptimization {
     }
 
     public static class ParameterRange {
-        private final double min;
-        private final double max;
+        private final int min;
+        private final int max;
 
-        public ParameterRange(double min, double max) {
+        public ParameterRange(int min, int max) {
             this.min = min;
             this.max = max;
         }
 
-        public double getRandomValue(Random rand) {
-            return min + (max - min) * rand.nextDouble();
+        public int getRandomValue(Random rand) {
+            return rand.nextInt(max - min + 1) + min;
         }
     }
 
@@ -174,7 +174,7 @@ public class BayesianOptimization {
         BayesianOptimization optimization = new BayesianOptimization(
                 poolingTimeWindowRange, searchRadiusOriginRange, searchRadiusDestinationRange);
 
-        double[] bestParams = optimization.optimizeParameters(100);
+        int[] bestParams = optimization.optimizeParameters(100);
         System.out.println("Best Parameters: Pooling Time Window = " + bestParams[0] +
                 ", Search Radius Origin = " + bestParams[1] +
                 ", Search Radius Destination = " + bestParams[2]);
