@@ -167,14 +167,14 @@ public class BayesianOptimization {
     }
 
     public static void main(String[] args) throws Exception {
-        ParameterRange poolingTimeWindowRange = new ParameterRange(0, 15);
+        ParameterRange poolingTimeWindowRange = new ParameterRange(5, 15);
         ParameterRange searchRadiusOriginRange = new ParameterRange(0, 5000);
         ParameterRange searchRadiusDestinationRange = new ParameterRange(0, 5000);
 
         BayesianOptimization optimization = new BayesianOptimization(
                 poolingTimeWindowRange, searchRadiusOriginRange, searchRadiusDestinationRange);
 
-        double[] bestParams = optimization.optimizeParameters(50);
+        double[] bestParams = optimization.optimizeParameters(100);
         System.out.println("Best Parameters: Pooling Time Window = " + bestParams[0] +
                 ", Search Radius Origin = " + bestParams[1] +
                 ", Search Radius Destination = " + bestParams[2]);
