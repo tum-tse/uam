@@ -69,7 +69,7 @@ public class MultiObjectiveNSGAII {
     // Data container for the UAM problem ==============================================================================
     private static List<UAMTrip> trips;
     private List<UAMTrip> subTrips = null;
-    private static Map<Id<UAMStation>, UAMStation> stations = null;
+    private static Map<Id<UAMStation>, UAMStation> stations;
     private final Map<Id<UAMStation>, List<UAMVehicle>> originStationVehicleMap = new HashMap<>();
     private final Map<Id<DvrpVehicle>, UAMStation> vehicleOriginStationMap = new ConcurrentHashMap<>();
     private final Map<Id<DvrpVehicle>, UAMStation> vehicleDestinationStationMap = new ConcurrentHashMap<>();
@@ -97,12 +97,13 @@ public class MultiObjectiveNSGAII {
     // TODO: Create an initial population of solutions using domain-specific knowledge (in our case is the vehicles which were used to create the initial fleet of the vehicles).
     // TODO: How to handle the extremely large travel time?
 
-    // Constructor
-    public MultiObjectiveNSGAII() {
-        initialize();
+    // Static initializer block
+    static {
+        initializeData();
     }
-    // Initialization method
-    private void initialize() {
+
+    // Static method to initialize data
+    private static void initializeData() {
         // Load data
 /*        {
             DataLoader dataLoader = new DataLoader();
@@ -110,17 +111,20 @@ public class MultiObjectiveNSGAII {
             //vehicles = dataLoader.getVehicles();
             stations = dataLoader.getStations();
         }*/
-        {
-            Network network = NetworkUtils.createNetwork();
-            new MatsimNetworkReader(network).readFile("scenarios/1-percent/uam-scenario/uam_network.xml.gz");
-            UAMXMLReader uamReader = new UAMXMLReader(network);
-            uamReader.readFile("scenarios/1-percent/uam-scenario/uam_vehicles.xml.gz");
-            stations = uamReader.getStations();
-        }
+        Network network = NetworkUtils.createNetwork();
+        new MatsimNetworkReader(network).readFile("scenarios/1-percent/uam-scenario/uam_network.xml.gz");
+        UAMXMLReader uamReader = new UAMXMLReader(network);
+        uamReader.readFile("scenarios/1-percent/uam-scenario/uam_vehicles.xml.gz");
+        stations = uamReader.getStations();
 
         //subTrips = extractSubTrips(dataLoader.getUamTrips());
         String filePath = "scenarios/1-percent/sao_paulo_population2trips.csv";
         trips = readTripsFromCsv(filePath);
+    }
+
+    // Constructor
+    public MultiObjectiveNSGAII() {
+        // The constructor is now empty as initialization is done in the static block
     }
 
     // Main method for testing
