@@ -79,11 +79,11 @@ public class BayesianOptimization {
         AtomicReference<double[]> bestParams = new AtomicReference<>(new double[3]);
 
         for (int i = 0; i < iterations; i += NUM_THREADS) {
-            List<Future<Void>> futures = new ArrayList<>();
+            List<Future<OptimizationResult>> futures = new ArrayList<>();
             for (int j = 0; j < NUM_THREADS && i + j < iterations; j++) {
-                futures.add(executorService.submit(new Callable<Void>() {
+                futures.add(executorService.submit(new Callable<OptimizationResult>() {
                     @Override
-                    public Void call() throws Exception {
+                    public OptimizationResult call() throws Exception {
                         double poolingTimeWindow = rand.nextDouble() * 15; // Example range
                         double searchRadiusOrigin = rand.nextDouble() * 5000; // Example range
                         double searchRadiusDestination = rand.nextDouble() * 5000; // Example range
@@ -98,27 +98,48 @@ public class BayesianOptimization {
                                     String.valueOf(false)
                             });
 
-                            synchronized (BayesianOptimization.this) {
-                                addDataPoint(poolingTimeWindow, searchRadiusOrigin, searchRadiusDestination, actualPerformance[3]);
-                            }
-
-                            if (actualPerformance[3] > bestPerformance.get()) {
-                                bestPerformance.set(actualPerformance[3]);
-                                bestParams.set(new double[]{poolingTimeWindow, searchRadiusOrigin, searchRadiusDestination});
-                            }
+                            return new OptimizationResult(poolingTimeWindow, searchRadiusOrigin, searchRadiusDestination, actualPerformance[3]);
                         }
                         return null;
                     }
                 }));
             }
 
-            for (Future<Void> future : futures) {
-                future.get(); // Wait for all tasks to complete
+            for (Future<OptimizationResult> future : futures) {
+                try {
+                    OptimizationResult result = future.get(); // Wait for each task to complete
+                    if (result != null) {
+                        synchronized (this) {
+                            addDataPoint(result.poolingTimeWindow, result.searchRadiusOrigin, result.searchRadiusDestination, result.performance);
+                            if (result.performance > bestPerformance.get()) {
+                                bestPerformance.set(result.performance);
+                                bestParams.set(new double[]{result.poolingTimeWindow, result.searchRadiusOrigin, result.searchRadiusDestination});
+                            }
+                        }
+                    }
+                } catch (Exception e) {
+                    System.err.println("Error in optimization thread: " + e.getMessage());
+                    // Optionally, you might want to break the loop or take other actions here
+                }
             }
         }
 
         executorService.shutdown();
         return bestParams.get();
+    }
+
+    private static class OptimizationResult {
+        final double poolingTimeWindow;
+        final double searchRadiusOrigin;
+        final double searchRadiusDestination;
+        final double performance;
+
+        OptimizationResult(double ptw, double sro, double srd, double perf) {
+            poolingTimeWindow = ptw;
+            searchRadiusOrigin = sro;
+            searchRadiusDestination = srd;
+            performance = perf;
+        }
     }
 
     // Main method for testing
