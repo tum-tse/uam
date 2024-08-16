@@ -964,7 +964,7 @@ public class MultiObjectiveNSGAII {
                         int oldVehicleId = solution[tripIndex];
 
                         // Check if all available vehicles are at capacity
-                        List<UAMVehicle> availableVehicles = tripVehicleMap.get(trip.getTripId());
+                        List<UAMVehicle> availableVehicles = new ArrayList<>(tripVehicleMap.get(trip.getTripId()));
                         boolean allVehiclesAtCapacity = availableVehicles.stream()
                                 .allMatch(v -> vehicleAssignments.getOrDefault(Integer.parseInt(v.getId().toString()), Collections.emptyList()).size() >= VEHICLE_CAPACITY);
 
@@ -1028,8 +1028,9 @@ public class MultiObjectiveNSGAII {
                     int tripIndex = assignedTrips.get(i);
                     UAMTrip trip = subTrips.get(tripIndex);
                     UAMVehicle newVehicle = feedDataForVehicleCreation(trip, false);
-                    List<UAMVehicle> availableVehicles = tripVehicleMap.computeIfAbsent(trip.getTripId(), k -> new ArrayList<>());
+                    List<UAMVehicle> availableVehicles = new ArrayList<>(tripVehicleMap.getOrDefault(trip.getTripId(), new ArrayList<>()));
                     availableVehicles.add(newVehicle);
+                    tripVehicleMap.put(trip.getTripId(), availableVehicles);
                     solution[tripIndex] = Integer.parseInt(newVehicle.getId().toString());
                     changesApplied = true;
                 }
