@@ -220,8 +220,8 @@ public class BayesianOptimization {
     public static void main(String[] args) {
         try {
             ParameterRange poolingTimeWindowRange = new ParameterRange(1, 30);
-            ParameterRange searchRadiusOriginRange = new ParameterRange(0, 5000);
-            ParameterRange searchRadiusDestinationRange = new ParameterRange(0, 5000);
+            ParameterRange searchRadiusOriginRange = new ParameterRange(600, 5000);
+            ParameterRange searchRadiusDestinationRange = new ParameterRange(600, 5000);
 
             BayesianOptimization optimization = new BayesianOptimization(
                     poolingTimeWindowRange, searchRadiusOriginRange, searchRadiusDestinationRange);
