@@ -974,6 +974,9 @@ public class MultiObjectiveNSGAII {
                             availableVehicles.add(newVehicle);
                             tripVehicleMap.put(trip.getTripId(), availableVehicles);
 
+                            // Update tripVehicleMap for the new vehicle
+                            updateTripVehicleMapForNewVehicle(newVehicle);
+
                             // Assign the trip to the new vehicle
                             solution[tripIndex] = Integer.parseInt(newVehicle.getId().toString());
                         } else {
@@ -1031,6 +1034,10 @@ public class MultiObjectiveNSGAII {
                     List<UAMVehicle> availableVehicles = new ArrayList<>(tripVehicleMap.getOrDefault(trip.getTripId(), new ArrayList<>()));
                     availableVehicles.add(newVehicle);
                     tripVehicleMap.put(trip.getTripId(), availableVehicles);
+
+                    // Update tripVehicleMap for the new vehicle
+                    updateTripVehicleMapForNewVehicle(newVehicle);
+
                     solution[tripIndex] = Integer.parseInt(newVehicle.getId().toString());
                     changesApplied = true;
                 }
