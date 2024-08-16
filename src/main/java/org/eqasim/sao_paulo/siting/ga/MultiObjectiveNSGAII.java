@@ -41,7 +41,7 @@ public class MultiObjectiveNSGAII {
     private static boolean ENABLE_LOCAL_SEARCH = true; // Enable local search after each generation
 
     private static final double ALPHA = - 2.02 * 0.9101 / 1000; // Weight for changed flight distances
-    private static final double BETA = - (double) 64 / 3600; // Weight for change in travel time
+    private static final double BETA = - 64.0 / 3600; // Weight for change in travel time
     private static final double BETA_CRUCIAL_TIME_ChANGE = - 0.1; //TODO: need to reconsider the value
     private static final double PENALTY_FOR_VEHICLE_CAPACITY_VIOLATION = -10000;
 
@@ -188,7 +188,7 @@ public class MultiObjectiveNSGAII {
 
         // Calculate and print the performance indicators
         SolutionFitnessPair finalSolution = calculateFitness(bestFeasibleSolution, true);
-        //printPerformanceIndicators(bestFeasibleSolution, "src/main/java/org/eqasim/sao_paulo/siting/ga/trip_statistics.csv");
+        printPerformanceIndicators(bestFeasibleSolution, "src/main/java/org/eqasim/sao_paulo/siting/ga/trip_statistics.csv");
 
         // Print the NUMBER_OF_TRIPS_LONGER_THAN
         //System.out.println("Threshold for trips longer than " + THRESHOLD_FOR_TRIPS_LONGER_THAN_STRING + ": " + NUMBER_OF_TRIPS_LONGER_TAHN);
@@ -343,10 +343,13 @@ public class MultiObjectiveNSGAII {
                 if (vehicleList == null) {
                     vehicleList = new ArrayList<>();
                 }
-                UAMVehicle vehicle = feedDataForVehicleCreation(trip, false);
-                vehicleList.add(vehicle);
+                UAMVehicle newVehicle = feedDataForVehicleCreation(trip, false);
+                vehicleList.add(newVehicle);
                 tripVehicleMap.put(trip.getTripId(), vehicleList);
                 //vehicleOccupancyMap.put(vehicle, VEHICLE_CAPACITY);
+
+                // Update tripVehicleMap for all relevant trips
+                updateTripVehicleMapForNewVehicle(newVehicle);
             }
         }
 
@@ -366,6 +369,20 @@ public class MultiObjectiveNSGAII {
             // Handle the case when there is no available vehicle: This might involve setting a default value or handling it in the fitness function
             individual[i] = VALUE_FOR_NO_VEHICLE_AVAILABLE;
             throw new IllegalArgumentException("Need to handle the case when there is no available vehicle for the trip.");
+        }
+    }
+    private void updateTripVehicleMapForNewVehicle(UAMVehicle newVehicle) {
+        UAMStation originStation = vehicleOriginStationMap.get(newVehicle.getId());
+        UAMStation destinationStation = vehicleDestinationStationMap.get(newVehicle.getId());
+
+        for (UAMTrip trip : subTrips) {
+            if (trip.calculateAccessTeleportationDistance(originStation) <= SEARCH_RADIUS_ORIGIN &&
+                    trip.calculateEgressTeleportationDistance(destinationStation) <= SEARCH_RADIUS_DESTINATION) {
+
+                List<UAMVehicle> tripVehicles = tripVehicleMap.getOrDefault(trip.getTripId(), new ArrayList<>());
+                tripVehicles.add(newVehicle);
+                tripVehicleMap.put(trip.getTripId(), tripVehicles);
+            }
         }
     }
 
@@ -1102,7 +1119,7 @@ public class MultiObjectiveNSGAII {
         System.out.println("95th percentile of arrival redirection rate: " + percentile95thArrivalRedirectionRate);
 
         // Print statistics to CSV
-        printStatisticsToCsv(solution, tripStatisticsCSVFile);
+        //printStatisticsToCsv(solution, tripStatisticsCSVFile);
     }
     // Method to print statistics to a CSV file
     private void printStatisticsToCsv(int[] solution, String fileName) {
