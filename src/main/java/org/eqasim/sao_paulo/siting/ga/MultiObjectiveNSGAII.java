@@ -932,7 +932,6 @@ public class MultiObjectiveNSGAII {
         final int MAX_ITERATIONS = 1000000; // A very high number, but not infinite
 
         while (!isSolutionFeasible && iterationCount < MAX_ITERATIONS) {
-            boolean changesApplied = false;
             Map<Integer, List<Integer>> vehicleAssignments = new HashMap<>();
 
             // Group trips by assigned vehicle
@@ -961,7 +960,6 @@ public class MultiObjectiveNSGAII {
                     for (int i = VEHICLE_CAPACITY; i < assignedTrips.size(); i++) {
                         int tripIndex = assignedTrips.get(i);
                         UAMTrip trip = subTrips.get(tripIndex);
-                        int oldVehicleId = solution[tripIndex];
 
                         // Check if all available vehicles are at capacity
                         List<UAMVehicle> availableVehicles = new ArrayList<>(tripVehicleMap.get(trip.getTripId()));
@@ -983,10 +981,6 @@ public class MultiObjectiveNSGAII {
                             // Assign to an available vehicle that's not at capacity
                             assignAvailableVehicle(tripIndex, solution);
                         }
-
-                        if (solution[tripIndex] != oldVehicleId) {
-                            changesApplied = true;
-                        }
                     }
                 }
             }
@@ -994,16 +988,11 @@ public class MultiObjectiveNSGAII {
             // Check if the solution is now feasible
             isSolutionFeasible = isFeasible(solution, false);
 
-            // If no changes were applied but the solution is still infeasible,
+/*            // If the solution is still infeasible
             // create new vehicles for all overloaded trips
-            if (!changesApplied && !isSolutionFeasible) {
-                changesApplied = forceCreateNewVehicles(solution);
-            }
-
-            // If still no changes applied, there's a deeper issue
-            if (!changesApplied) {
-                throw new IllegalStateException("Error: Unable to modify solution to make it feasible.");
-            }
+            if (!isSolutionFeasible) {
+                forceCreateNewVehicles(solution);
+            }*/
 
             iterationCount++;
         }
@@ -1014,8 +1003,7 @@ public class MultiObjectiveNSGAII {
         return solution;
     }
 
-    private boolean forceCreateNewVehicles(int[] solution) {
-        boolean changesApplied = false;
+    private void forceCreateNewVehicles(int[] solution) {
         Map<Integer, List<Integer>> vehicleAssignments = new HashMap<>();
 
         // Group trips by assigned vehicle
@@ -1039,11 +1027,9 @@ public class MultiObjectiveNSGAII {
                     updateTripVehicleMapForNewVehicle(newVehicle);
 
                     solution[tripIndex] = Integer.parseInt(newVehicle.getId().toString());
-                    changesApplied = true;
                 }
             }
         }
-        return changesApplied;
     }
 
     // Performance indicators ==========================================================================================
