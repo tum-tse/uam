@@ -929,9 +929,10 @@ public class MultiObjectiveNSGAII {
     public int[] guaranteeFeasibleSolution(int[] solution) {
         boolean isSolutionFeasible = false;
         int iterationCount = 0;
-        final int MAX_ITERATIONS = 1000; // Prevent infinite loops
+        final int MAX_ITERATIONS = 1000000; // A very high number, but not infinite
 
         while (!isSolutionFeasible && iterationCount < MAX_ITERATIONS) {
+            boolean changesApplied = false;
             Map<Integer, List<Integer>> vehicleAssignments = new HashMap<>();
 
             // Group trips by assigned vehicle
@@ -939,8 +940,6 @@ public class MultiObjectiveNSGAII {
                 int vehicleId = solution[i];
                 vehicleAssignments.computeIfAbsent(vehicleId, k -> new ArrayList<>()).add(i);
             }
-
-            boolean changesApplied = false;
 
             // Identify and fix overloaded vehicles
             for (Map.Entry<Integer, List<Integer>> entry : vehicleAssignments.entrySet()) {
@@ -993,20 +992,50 @@ public class MultiObjectiveNSGAII {
             isSolutionFeasible = isFeasible(solution, false);
 
             // If no changes were applied but the solution is still infeasible,
-            // we need to break out to avoid an infinite loop
+            // create new vehicles for all overloaded trips
             if (!changesApplied && !isSolutionFeasible) {
-                break;
+                changesApplied = forceCreateNewVehicles(solution);
+            }
+
+            // If still no changes applied, there's a deeper issue
+            if (!changesApplied) {
+                throw new IllegalStateException("Error: Unable to modify solution to make it feasible.");
             }
 
             iterationCount++;
         }
 
-        // Check whether we could find a feasible solution
         if (!isSolutionFeasible) {
-            throw new IllegalArgumentException("Error: Could not find a feasible solution.");
+            throw new IllegalArgumentException("Error: Could not find a feasible solution after " + MAX_ITERATIONS + " iterations.");
+        }
+        return solution;
+    }
+
+    private boolean forceCreateNewVehicles(int[] solution) {
+        boolean changesApplied = false;
+        Map<Integer, List<Integer>> vehicleAssignments = new HashMap<>();
+
+        // Group trips by assigned vehicle
+        for (int i = 0; i < solution.length; i++) {
+            int vehicleId = solution[i];
+            vehicleAssignments.computeIfAbsent(vehicleId, k -> new ArrayList<>()).add(i);
         }
 
-        return solution;
+        for (Map.Entry<Integer, List<Integer>> entry : vehicleAssignments.entrySet()) {
+            List<Integer> assignedTrips = entry.getValue();
+            if (assignedTrips.size() > VEHICLE_CAPACITY) {
+                for (int i = VEHICLE_CAPACITY; i < assignedTrips.size(); i++) {
+                    int tripIndex = assignedTrips.get(i);
+                    UAMTrip trip = subTrips.get(tripIndex);
+                    UAMVehicle newVehicle = feedDataForVehicleCreation(trip, false);
+                    List<UAMVehicle> availableVehicles = tripVehicleMap.computeIfAbsent(trip.getTripId(), k -> new ArrayList<>());
+                    availableVehicles.add(newVehicle);
+                    solution[tripIndex] = Integer.parseInt(newVehicle.getId().toString());
+                    changesApplied = true;
+                }
+            }
+        }
+        return changesApplied;
     }
 
     // Performance indicators ==========================================================================================
