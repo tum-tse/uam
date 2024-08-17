@@ -1427,19 +1427,6 @@ public class MultiObjectiveNSGAII {
                         data.getPercentile95thTotalTravelTime()
                 ));
             }
-
-            // Write additional information about AssignedAccessStation and AssignedEgressStation
-            writer.append("\nAssigned Access and Egress Stations:\n");
-            for (SolutionIndicatorData data : indicatorDataList) {
-                writer.append("Solution:\n");
-                for (Map.Entry<String, String> entry : data.getAssignedAccessStations().entrySet()) {
-                    String tripId = entry.getKey();
-                    String accessStation = entry.getValue();
-                    String egressStation = data.getAssignedEgressStations().get(tripId);
-                    writer.append(String.format("TripId: %s, AccessStation: %s, EgressStation: %s\n", tripId, accessStation, egressStation));
-                }
-                writer.append("\n");
-            }
         } catch (IOException e) {
             e.printStackTrace();
         }
