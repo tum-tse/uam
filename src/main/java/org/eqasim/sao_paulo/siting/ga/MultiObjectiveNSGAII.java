@@ -1035,11 +1035,11 @@ public class MultiObjectiveNSGAII {
             // Check if the solution is now feasible
             isSolutionFeasible = isFeasible(solution, false);
 
-/*            // If the solution is still infeasible
+            // If the solution is still infeasible
             // create new vehicles for all overloaded trips
             if (!isSolutionFeasible) {
                 forceCreateNewVehicles(solution);
-            }*/
+            }
 
             iterationCount++;
         }
