@@ -1082,6 +1082,9 @@ public class MultiObjectiveNSGAII {
     // Performance indicators ==========================================================================================
     // Method to calculate and print the performance indicators
     private void printPerformanceIndicators(int[] solution, SolutionIndicatorData indicatorData, String tripStatisticsCSVFile) {
+        // Print the pooling rate
+        System.out.println("Pooling rate: " + indicatorData.getPoolingRate());
+
         // Method to calculate and print the number of vehicles by capacity
         Map<Integer, Integer> capacityCount = countVehicleCapacities(solution);
         Set<Integer> uniqueVehicles = new HashSet<>();
