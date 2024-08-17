@@ -83,13 +83,13 @@ public class MultiObjectiveNSGAII {
             (a, b) -> Double.compare(a.getFitness()[0], b.getFitness()[0])  // Min heap
     );
     private static final int MAX_BEST_SOLUTIONS = 100;  // Adjust as needed
-    private final Map<String, Double> finalSolutionTravelTimeChanges = new HashMap<>(); // Additional field to store travel time change of each trip for the final best feasible solution
-    private final Map<String, Double> finalSolutionFlightDistanceChanges = new HashMap<>(); // Additional field to store saved flight distance of each trip for the final best feasible solution
-    private final Map<String, Double> finalSolutionDepartureRedirectionRate = new HashMap<>(); // Additional field to store redirection rate of each trip for the final best feasible solution
-    private final Map<String, Double> finalSolutionArrivalRedirectionRate = new HashMap<>(); // Additional field to store redirection rate of each trip for the final best feasible solution
-    private final Map<String, Double> finalSolutionTotalTravelTime = new HashMap<>(); // Additional field to store total travel time of each trip for the final best feasible solution
-    private final Map<String, String> finalSolutionAssignedAccessStation = new HashMap<>(); // Additional field to store assigned access station of each trip for the final best feasible solution
-    private final Map<String, String> finalSolutionAssignedEgressStation = new HashMap<>(); // Additional field to store assigned egress station of each trip for the final best feasible solution
+    //private final Map<String, Double> finalSolutionTravelTimeChanges = new HashMap<>(); // Additional field to store travel time change of each trip for the final best feasible solution
+    //private final Map<String, Double> finalSolutionFlightDistanceChanges = new HashMap<>(); // Additional field to store saved flight distance of each trip for the final best feasible solution
+    //private final Map<String, Double> finalSolutionDepartureRedirectionRate = new HashMap<>(); // Additional field to store redirection rate of each trip for the final best feasible solution
+    //private final Map<String, Double> finalSolutionArrivalRedirectionRate = new HashMap<>(); // Additional field to store redirection rate of each trip for the final best feasible solution
+    //private final Map<String, Double> finalSolutionTotalTravelTime = new HashMap<>(); // Additional field to store total travel time of each trip for the final best feasible solution
+    //private final Map<String, String> finalSolutionAssignedAccessStation = new HashMap<>(); // Additional field to store assigned access station of each trip for the final best feasible solution
+    //private final Map<String, String> finalSolutionAssignedEgressStation = new HashMap<>(); // Additional field to store assigned egress station of each trip for the final best feasible solution
 
     // Parallel computing
     private static final int numProcessors = Runtime.getRuntime().availableProcessors();
@@ -190,8 +190,9 @@ public class MultiObjectiveNSGAII {
         System.out.println("The fitness of the best feasible solution: " + Arrays.toString(bestFeasibleSolutionFitnessPair.getFitness()));*/
 
         // Calculate and print the performance indicators
-        //SolutionFitnessPair finalSolution = calculateFitness(bestFeasibleSolution,true);
-        //printPerformanceIndicators(bestFeasibleSolution, "src/main/java/org/eqasim/sao_paulo/siting/ga/trip_statistics.csv");
+        SolutionIndicatorData indicatorData = new SolutionIndicatorData(bestFeasibleSolution);
+        SolutionFitnessPair finalSolution = calculateFitness(bestFeasibleSolution, indicatorData, true);
+        printPerformanceIndicators(bestFeasibleSolution, indicatorData, "src/main/java/org/eqasim/sao_paulo/siting/ga/trip_statistics.csv");
 
         // Print the NUMBER_OF_TRIPS_LONGER_THAN
         //System.out.println("Threshold for trips longer than " + THRESHOLD_FOR_TRIPS_LONGER_THAN_STRING + ": " + NUMBER_OF_TRIPS_LONGER_TAHN);
@@ -391,7 +392,7 @@ public class MultiObjectiveNSGAII {
 
     // Objective function ==============================================================================================
     // Calculate fitness for an individual
-    private SolutionFitnessPair calculateFitness(int[] individual, SolutionIndicatorData indicatorData, boolean isFinalBestFeasibleSolution) {
+    private SolutionFitnessPair calculateFitness(int[] individual, SolutionIndicatorData indicatorData, boolean isFinalSolutions) {
         Map<Integer, List<UAMTrip>> vehicleAssignments = new HashMap<>();
         Map<Integer, Integer> vehicleLoadCount = new HashMap<>();
         Map<String, Double> travelTimeChangeMap = new HashMap<>();
@@ -408,10 +409,10 @@ public class MultiObjectiveNSGAII {
             vehicleLoadCount.put(vehicleId, vehicleLoadCount.getOrDefault(vehicleId, 0) + 1);
         }
 
-        double[] fitness = getFitnessPerVehicle(isFinalBestFeasibleSolution, vehicleAssignments, travelTimeChangeMap, indicatorData);
+        double[] fitness = getFitnessPerVehicle(isFinalSolutions, vehicleAssignments, travelTimeChangeMap, indicatorData);
 
         // Calculate pooling rate and vehicle capacity rates
-        if (isFinalBestFeasibleSolution) {
+        if (isFinalSolutions) {
             int pooledTrips = 0;
             int totalVehicles = vehicleAssignments.size();
             Map<Integer, Integer> capacityCount = new HashMap<>();
@@ -458,7 +459,7 @@ public class MultiObjectiveNSGAII {
 
         return solutionPair;
     }
-    private double[] getFitnessPerVehicle(boolean isFinalBestFeasibleSolution, Map<Integer, List<UAMTrip>> vehicleAssignments, Map<String, Double> travelTimeChangeMap, SolutionIndicatorData indicatorData) {
+    private double[] getFitnessPerVehicle(boolean isFinalSolutions, Map<Integer, List<UAMTrip>> vehicleAssignments, Map<String, Double> travelTimeChangeMap, SolutionIndicatorData indicatorData) {
         double totalFitness = 0.0;
         double totalDistanceChange = 0.0;
         double totalTimeChange = 0.0;
@@ -474,7 +475,7 @@ public class MultiObjectiveNSGAII {
             if (trips.isEmpty()) continue;
             if (trips.size() == 1){
                 UAMTrip trip = trips.get(0);
-                totalFitness = getFitnessForNonPooledOrBaseTrip(trip, originStationOfVehicle, destinationStationOfVehicle, totalFitness, isFinalBestFeasibleSolution, travelTimeChangeMap, indicatorData);
+                totalFitness = getFitnessForNonPooledOrBaseTrip(trip, originStationOfVehicle, destinationStationOfVehicle, totalFitness, isFinalSolutions, travelTimeChangeMap, indicatorData);
                 continue;
             }
 
@@ -492,7 +493,7 @@ public class MultiObjectiveNSGAII {
             // Calculate fitness based on the proposed pooling option
             for (UAMTrip trip : trips) {
                 if(trip.getTripId().equals(baseTrip.getTripId())){
-                    totalFitness = getFitnessForNonPooledOrBaseTrip(trip, originStationOfVehicle, destinationStationOfVehicle, totalFitness, isFinalBestFeasibleSolution, travelTimeChangeMap, indicatorData);
+                    totalFitness = getFitnessForNonPooledOrBaseTrip(trip, originStationOfVehicle, destinationStationOfVehicle, totalFitness, isFinalSolutions, travelTimeChangeMap, indicatorData);
                     continue;
                 }
 
@@ -508,7 +509,7 @@ public class MultiObjectiveNSGAII {
                 double savedFlightDistance = trip.calculateFlightDistance(trip.getOriginStation(), trip.getDestinationStation());
                 totalFitness += ALPHA * (-1) * savedFlightDistance;
                 tripFlightDistanceChange -= savedFlightDistance;
-                if(isFinalBestFeasibleSolution){
+                if(isFinalSolutions){
                     //finalSolutionFlightDistanceChanges.put(trip.getTripId(), tripFlightDistanceChange);
                     indicatorData.setFlightDistanceChanges(trip.getTripId(), tripFlightDistanceChange);
                 }
@@ -529,14 +530,14 @@ public class MultiObjectiveNSGAII {
                 totalFitness += BETA * additionalTravelTimeDueToEgressMatching;
                 tripTimeChange += additionalTravelTimeDueToEgressMatching;
 
-                if(isFinalBestFeasibleSolution){
+                if(isFinalSolutions){
                     //finalSolutionTravelTimeChanges.put(trip.getTripId(), tripTimeChange);
                     indicatorData.setTravelTimeChanges(trip.getTripId(), tripTimeChange);
                 }
 
                 travelTimeChangeMap.put(trip.getTripId(), tripTimeChange);
 
-                if(isFinalBestFeasibleSolution){
+                if(isFinalSolutions){
                     double departureRedirectionRate = ( trip.calculateAccessTeleportationDistance(originStationOfVehicle) - trip.calculateAccessTeleportationDistance(trip.getOriginStation()) ) / ( trip.calculateAccessTeleportationDistance(trip.getOriginStation()) );
                     //finalSolutionDepartureRedirectionRate.put(trip.getTripId(), departureRedirectionRate);
                     indicatorData.setDepartureRedirectionRate(trip.getTripId(), departureRedirectionRate);
@@ -567,7 +568,7 @@ public class MultiObjectiveNSGAII {
         }
         return new double[]{totalFitness, totalDistanceChange, totalTimeChange, totalViolationPenalty};
     }
-    private double getFitnessForNonPooledOrBaseTrip(UAMTrip trip, UAMStation originStationOfVehicle, UAMStation destinationStationOfVehicle, double totalFitness, boolean isFinalBestFeasibleSolution, Map<String, Double> travelTimeChangeMap, SolutionIndicatorData indicatorData) {
+    private double getFitnessForNonPooledOrBaseTrip(UAMTrip trip, UAMStation originStationOfVehicle, UAMStation destinationStationOfVehicle, double totalFitness, boolean isFinalSolutions, Map<String, Double> travelTimeChangeMap, SolutionIndicatorData indicatorData) {
         double tripTimeChange = 0.0;
         double tripFlightDistanceChange = 0.0;
 
@@ -575,7 +576,7 @@ public class MultiObjectiveNSGAII {
         double flightDistanceChange = getFlightDistanceChange(trip, originStationOfVehicle, destinationStationOfVehicle);
         totalFitness += ALPHA * flightDistanceChange;
         tripFlightDistanceChange += flightDistanceChange;
-        if(isFinalBestFeasibleSolution){
+        if(isFinalSolutions){
             //finalSolutionFlightDistanceChanges.put(trip.getTripId(), tripFlightDistanceChange);
             indicatorData.setFlightDistanceChanges(trip.getTripId(), tripFlightDistanceChange);
         }
@@ -596,14 +597,14 @@ public class MultiObjectiveNSGAII {
         totalFitness += BETA * travelTimeChangeDueToEgressMatching;
         tripTimeChange += travelTimeChangeDueToEgressMatching;
 
-        if(isFinalBestFeasibleSolution){
+        if(isFinalSolutions){
             //finalSolutionTravelTimeChanges.put(trip.getTripId(), tripTimeChange);
             indicatorData.setTravelTimeChanges(trip.getTripId(), tripTimeChange);
         }
 
         travelTimeChangeMap.put(trip.getTripId(), tripTimeChange);
 
-        if(isFinalBestFeasibleSolution){
+        if(isFinalSolutions){
             double departureRedirectionRate = ( trip.calculateAccessTeleportationDistance(originStationOfVehicle) - trip.calculateAccessTeleportationDistance(trip.getOriginStation()) ) / ( trip.calculateAccessTeleportationDistance(trip.getOriginStation()) );
             //finalSolutionDepartureRedirectionRate.put(trip.getTripId(), departureRedirectionRate);
             indicatorData.setDepartureRedirectionRate(trip.getTripId(), departureRedirectionRate);
@@ -1080,7 +1081,7 @@ public class MultiObjectiveNSGAII {
 
     // Performance indicators ==========================================================================================
     // Method to calculate and print the performance indicators
-    private void printPerformanceIndicators(int[] solution, String tripStatisticsCSVFile) {
+    private void printPerformanceIndicators(int[] solution, SolutionIndicatorData indicatorData, String tripStatisticsCSVFile) {
         // Method to calculate and print the number of vehicles by capacity
         Map<Integer, Integer> capacityCount = countVehicleCapacities(solution);
         Set<Integer> uniqueVehicles = new HashSet<>();
@@ -1110,8 +1111,8 @@ public class MultiObjectiveNSGAII {
             if (tripsForVehicle.size() > 1) { // Vehicle shared with others
                 for (int tripIndex : tripsForVehicle) {
                     String tripId = subTrips.get(tripIndex).getTripId();
-                    if (finalSolutionTravelTimeChanges.containsKey(tripId)) {
-                        double travelTimeChange = finalSolutionTravelTimeChanges.get(tripId);
+                    if (indicatorData.getTravelTimeChanges().containsKey(tripId)) {
+                        double travelTimeChange = indicatorData.getTravelTimeChanges().get(tripId);
                         sharedTravelTimeChanges.add(travelTimeChange);
                         if (travelTimeChange > SHARED_RIDE_TRAVEL_TIME_CHANGE_THRESHOLD) {
                             sharedRidesExceedingThreshold++;  // Increment counter
@@ -1142,7 +1143,7 @@ public class MultiObjectiveNSGAII {
         System.out.println("5th percentile of travel time change (shared vehicles): " + percentile5thTravelTime);
         System.out.println("95th percentile of travel time change (shared vehicles): " + percentile95thTravelTime);
 
-        Collection<Double> flightDistanceChanges = finalSolutionFlightDistanceChanges.values();
+        Collection<Double> flightDistanceChanges = indicatorData.getFlightDistanceChanges().values();
         List<Double> sortedFlightDistanceChanges = new ArrayList<>(flightDistanceChanges);
         Collections.sort(sortedFlightDistanceChanges);
 
@@ -1157,7 +1158,7 @@ public class MultiObjectiveNSGAII {
         System.out.println("5th percentile of flight distance change: " + percentile5thFlightDistance);
         System.out.println("95th percentile of flight distance change: " + percentile95thFlightDistance);
 
-        Collection<Double> departureRedirectionRates = finalSolutionDepartureRedirectionRate.values();
+        Collection<Double> departureRedirectionRates = indicatorData.getDepartureRedirectionRates().values();
         List<Double> sortedDepartureRedirectionRates = new ArrayList<>(departureRedirectionRates);
         Collections.sort(sortedDepartureRedirectionRates);
 
@@ -1172,7 +1173,7 @@ public class MultiObjectiveNSGAII {
         System.out.println("5th percentile of departure redirection rate: " + percentile5thDepartureRedirectionRate);
         System.out.println("95th percentile of departure redirection rate: " + percentile95thDepartureRedirectionRate);
 
-        Collection<Double> arrivalRedirectionRates = finalSolutionArrivalRedirectionRate.values();
+        Collection<Double> arrivalRedirectionRates = indicatorData.getArrivalRedirectionRates().values();
         List<Double> sortedArrivalRedirectionRates = new ArrayList<>(arrivalRedirectionRates);
         Collections.sort(sortedArrivalRedirectionRates);
 
@@ -1188,10 +1189,10 @@ public class MultiObjectiveNSGAII {
         System.out.println("95th percentile of arrival redirection rate: " + percentile95thArrivalRedirectionRate);
 
         // Print statistics to CSV
-        //printStatisticsToCsv(solution, tripStatisticsCSVFile);
+        printStatisticsToCsv(solution, indicatorData, tripStatisticsCSVFile);
     }
     // Method to print statistics to a CSV file
-    private void printStatisticsToCsv(int[] solution, String fileName) {
+    private void printStatisticsToCsv(int[] solution, SolutionIndicatorData indicatorData, String fileName) {
         // Create a map to count the number of trips assigned to each vehicle
         Map<Integer, Integer> vehicleTripCount = new HashMap<>();
         for (int vehicleId : solution) {
@@ -1204,13 +1205,13 @@ public class MultiObjectiveNSGAII {
                 UAMTrip trip = subTrips.get(i);
                 String tripId = trip.getTripId();
                 int assignedVehicleId = solution[i];
-                double travelTimeChange = finalSolutionTravelTimeChanges.getOrDefault(tripId, 0.0);
-                double flightDistanceChange = finalSolutionFlightDistanceChanges.getOrDefault(tripId, 0.0);
-                double departureRedirectionRate = finalSolutionDepartureRedirectionRate.getOrDefault(tripId, 0.0);
-                double arrivalRedirectionRate = finalSolutionArrivalRedirectionRate.getOrDefault(tripId, 0.0);
-                String assignedAccessStation = finalSolutionAssignedAccessStation.getOrDefault(tripId, "N/A");
-                String assignedEgressStation = finalSolutionAssignedEgressStation.getOrDefault(tripId, "N/A");
-                double totalTravelTime = finalSolutionTotalTravelTime.getOrDefault(tripId, 0.0);
+                double travelTimeChange = indicatorData.getTravelTimeChanges().get(tripId);
+                double flightDistanceChange = indicatorData.getFlightDistanceChanges().get(tripId);
+                double departureRedirectionRate = indicatorData.getDepartureRedirectionRates().get(tripId);
+                double arrivalRedirectionRate = indicatorData.getArrivalRedirectionRates().get(tripId);
+                String assignedAccessStation = indicatorData.getAssignedAccessStations().get(tripId);
+                String assignedEgressStation = indicatorData.getAssignedEgressStations().get(tripId);
+                double totalTravelTime = indicatorData.getTotalTravelTimes().get(tripId);
 
                 // Get the number of trips assigned to the same vehicle
                 int tripCountForVehicle = vehicleTripCount.getOrDefault(assignedVehicleId, 0);
@@ -1261,13 +1262,13 @@ public class MultiObjectiveNSGAII {
 
         // Getters and setters for all fields
         public int[] getSolution() { return solution; }
-        public Map<String, Double> getTravelTimeChanges() { return travelTimeChanges; }
-        public Map<String, Double> getFlightDistanceChanges() { return flightDistanceChanges; }
-        public Map<String, Double> getDepartureRedirectionRates() { return departureRedirectionRates; }
-        public Map<String, Double> getArrivalRedirectionRates() { return arrivalRedirectionRates; }
-        public Map<String, Double> getTotalTravelTimes() { return totalTravelTimes; }
-        public Map<String, String> getAssignedAccessStations() { return assignedAccessStations; }
-        public Map<String, String> getAssignedEgressStations() { return assignedEgressStations; }
+        private Map<String, Double> getTravelTimeChanges() { return travelTimeChanges; }
+        private Map<String, Double> getFlightDistanceChanges() { return flightDistanceChanges; }
+        private Map<String, Double> getDepartureRedirectionRates() { return departureRedirectionRates; }
+        private Map<String, Double> getArrivalRedirectionRates() { return arrivalRedirectionRates; }
+        private Map<String, Double> getTotalTravelTimes() { return totalTravelTimes; }
+        private  Map<String, String> getAssignedAccessStations() { return assignedAccessStations; }
+        private  Map<String, String> getAssignedEgressStations() { return assignedEgressStations; }
         public double[] getFitness() { return fitness; }
         public void setFitness(double[] fitness) { this.fitness = fitness; }
         public double getPoolingRate() { return poolingRate; }
