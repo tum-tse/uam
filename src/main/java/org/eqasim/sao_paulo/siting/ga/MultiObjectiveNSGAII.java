@@ -94,6 +94,8 @@ public class MultiObjectiveNSGAII {
     // Parallel computing
     private static final int numProcessors = Runtime.getRuntime().availableProcessors();
     private static final int bufferDivider = 1;
+    private static String uamScenarioInputPath = "scenarios/1-percent/uam-scenario_400";
+    private String outputFile = "src/main/java/org/eqasim/sao_paulo/siting/ga/results/vertiports_400";
     // TODO: Create an initial population of solutions using domain-specific knowledge (in our case is the vehicles which were used to create the initial fleet of the vehicles).
     // TODO: How to handle the extremely large travel time?
 
@@ -112,9 +114,9 @@ public class MultiObjectiveNSGAII {
             stations = dataLoader.getStations();
         }*/
         Network network = NetworkUtils.createNetwork();
-        new MatsimNetworkReader(network).readFile("scenarios/1-percent/uam-scenario/uam_network.xml.gz");
+        new MatsimNetworkReader(network).readFile(uamScenarioInputPath + "/uam_network.xml.gz");
         UAMXMLReader uamReader = new UAMXMLReader(network);
-        uamReader.readFile("scenarios/1-percent/uam-scenario/uam_vehicles.xml.gz");
+        uamReader.readFile(uamScenarioInputPath + "/uam_vehicles.xml.gz");
         stations = uamReader.getStations();
 
         //subTrips = extractSubTrips(dataLoader.getUamTrips());
@@ -192,7 +194,7 @@ public class MultiObjectiveNSGAII {
         // Calculate and print the performance indicators
         SolutionIndicatorData indicatorData = new SolutionIndicatorData(bestFeasibleSolution);
         SolutionFitnessPair finalSolution = calculateFitness(bestFeasibleSolution, indicatorData, true);
-        printPerformanceIndicators(bestFeasibleSolution, indicatorData, "src/main/java/org/eqasim/sao_paulo/siting/ga/trip_statistics.csv");
+        printPerformanceIndicators(bestFeasibleSolution, indicatorData, outputFile + "/trip_statistics.csv");
 
         // Print the NUMBER_OF_TRIPS_LONGER_THAN
         //System.out.println("Threshold for trips longer than " + THRESHOLD_FOR_TRIPS_LONGER_THAN_STRING + ": " + NUMBER_OF_TRIPS_LONGER_TAHN);
@@ -1348,7 +1350,7 @@ public class MultiObjectiveNSGAII {
         }
 
         // Write indicators to CSV
-        writeIndicatorsToCsv(indicatorDataList, "src/main/java/org/eqasim/sao_paulo/siting/ga/last_iteration_solutions_indicators.csv");
+        writeIndicatorsToCsv(indicatorDataList, outputFile + "/last_iteration_solutions_indicators.csv");
     }
     private void calculateAdditionalIndicators(SolutionIndicatorData indicatorData) {
         List<Double> travelTimeChanges = new ArrayList<>(indicatorData.getTravelTimeChanges().values());
