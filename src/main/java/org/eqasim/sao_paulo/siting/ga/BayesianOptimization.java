@@ -117,8 +117,8 @@ public class BayesianOptimization {
         for (int i = 0; i < iterations; i++) {
             List<Future<OptimizationResult>> futures = new ArrayList<>();
             for (int ptw = poolingTimeWindowRange.getMinValue(); ptw <= poolingTimeWindowRange.getMaxValue(); ptw++) {
-                for (int sro = searchRadiusOriginRange.getMinValue(); sro <= searchRadiusOriginRange.getMaxValue(); sro += 1000) {
-                    for (int srd = searchRadiusDestinationRange.getMinValue(); srd <= searchRadiusDestinationRange.getMaxValue(); srd += 1000) {
+                for (int sro = searchRadiusOriginRange.getMinValue(); sro <= searchRadiusOriginRange.getMaxValue(); sro += 100) {
+                    for (int srd = searchRadiusDestinationRange.getMinValue(); srd <= searchRadiusDestinationRange.getMaxValue(); srd += 100) {
                         final int finalPtw = ptw;
                         final int finalSro = sro;
                         final int finalSrd = srd;
