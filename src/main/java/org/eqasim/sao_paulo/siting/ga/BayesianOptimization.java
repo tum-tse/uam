@@ -176,6 +176,7 @@ public class BayesianOptimization {
                 String.valueOf(poolingTimeWindow),
                 String.valueOf(searchRadiusOrigin),
                 String.valueOf(searchRadiusDestination),
+                String.valueOf(false),
                 String.valueOf(false)
         });
         return actualPerformance[3];
@@ -219,7 +220,7 @@ public class BayesianOptimization {
 
     public static void main(String[] args) {
         try {
-            ParameterRange poolingTimeWindowRange = new ParameterRange(1, 30);
+            ParameterRange poolingTimeWindowRange = new ParameterRange(1, 20);
             ParameterRange searchRadiusOriginRange = new ParameterRange(600, 5000);
             ParameterRange searchRadiusDestinationRange = new ParameterRange(600, 5000);
 

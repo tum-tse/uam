@@ -39,6 +39,7 @@ public class MultiObjectiveNSGAII {
     private static final double CROSSOVER_RATE = 0.7; // Crossover rate
     private static final int TOURNAMENT_SIZE = 5; // Tournament size for selection
     private static boolean ENABLE_LOCAL_SEARCH = true; // Enable local search after each generation
+    private static boolean ENABLE_PRINT_RESULTS = true; // Enable printing results to the CSVs
 
     private static final double ALPHA = - 2.02 * 0.9101 / 1000; // Weight for changed flight distances
     private static final double BETA = - 64.0 / 3600; // Weight for change in travel time
@@ -87,8 +88,8 @@ public class MultiObjectiveNSGAII {
     private static final int bufferDivider = 1;
 
     // io paths
-    private static String uamScenarioInputPath = "scenarios/1-percent/uam-scenario_400";
-    private String outputFile = "src/main/java/org/eqasim/sao_paulo/siting/ga/results/vertiports_400";
+    private static String uamScenarioInputPath = "scenarios/1-percent/uam-scenario_800";
+    private String outputFile = "src/main/java/org/eqasim/sao_paulo/siting/ga/results/vertiports_800";
     // TODO: Create an initial population of solutions using domain-specific knowledge (in our case is the vehicles which were used to create the initial fleet of the vehicles).
 
     // Static initializer block
@@ -129,8 +130,8 @@ public class MultiObjectiveNSGAII {
 
     // Main method to run the the specified algorithm ==================================================================
     public double[] callAlgorithm(String[] args) throws IOException, InterruptedException {
-        if (args.length < 4) {
-            System.out.println("Usage: java MultiObjectiveNSGAII <BUFFER_END_TIME> <SEARCH_RADIUS_ORIGIN> <SEARCH_RADIUS_DESTINATION> <ENABLE_LOCAL_SEARCH>");
+        if (args.length < 5) {
+            System.out.println("Usage: java MultiObjectiveNSGAII <BUFFER_END_TIME> <SEARCH_RADIUS_ORIGIN> <SEARCH_RADIUS_DESTINATION> <ENABLE_LOCAL_SEARCH> <ENABLE_PRINT_RESULTS>");
             System.exit(1);
         }
 
@@ -138,6 +139,7 @@ public class MultiObjectiveNSGAII {
         SEARCH_RADIUS_ORIGIN = Double.parseDouble(args[1]);
         SEARCH_RADIUS_DESTINATION = Double.parseDouble(args[2]);
         ENABLE_LOCAL_SEARCH = Boolean.parseBoolean(args[3]);
+        ENABLE_PRINT_RESULTS = Boolean.parseBoolean(args[4]);
 
         MultiObjectiveNSGAII instance = new MultiObjectiveNSGAII();
         return instance.runAlgorithm();
@@ -166,7 +168,9 @@ public class MultiObjectiveNSGAII {
             SolutionFitnessPair bestSolution = Collections.max(population, Comparator.comparingDouble(p -> p.getFitness()[0]));
             System.out.println("Generation " + gen + ": Best fitness = " + Arrays.toString(bestSolution.getFitness()));
             if (gen == MAX_GENERATIONS - 1) {
-                calculatePopulationIndicators(population);
+                if(ENABLE_PRINT_RESULTS) {
+                    calculatePopulationIndicators(population);
+                }
             }
         }
 
@@ -1159,7 +1163,9 @@ public class MultiObjectiveNSGAII {
         System.out.println("95th percentile of arrival redirection rate: " + percentile95thArrivalRedirectionRate);
 
         // Print statistics to CSV
-        printStatisticsToCsv(solution, indicatorData, tripStatisticsCSVFile);
+        if(ENABLE_PRINT_RESULTS) {
+            printStatisticsToCsv(solution, indicatorData, tripStatisticsCSVFile);
+        }
     }
     // Method to print statistics to a CSV file
     private void printStatisticsToCsv(int[] solution, SolutionIndicatorData indicatorData, String fileName) {
