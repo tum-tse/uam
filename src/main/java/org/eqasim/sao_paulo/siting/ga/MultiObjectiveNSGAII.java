@@ -33,7 +33,7 @@ public class MultiObjectiveNSGAII {
 
     // Genetic Algorithm parameters ====================================================================================
     private static final int MAX_GENERATIONS = 100; // Max number of generations
-    private static final int CROSSOVER_DISABLE_AFTER = 100; // New field to control when to stop crossover
+    //private static final int CROSSOVER_DISABLE_AFTER = 100; // New field to control when to stop crossover
     private static final int POP_SIZE = 50; // Population size
     private static final double MUTATION_RATE = 0.05; // Mutation rate
     private static final double CROSSOVER_RATE = 0.7; // Crossover rate
@@ -42,7 +42,7 @@ public class MultiObjectiveNSGAII {
 
     private static final double ALPHA = - 2.02 * 0.9101 / 1000; // Weight for changed flight distances
     private static final double BETA = - 64.0 / 3600; // Weight for change in travel time
-    private static final double BETA_CRUCIAL_TIME_ChANGE = - 0.1; //TODO: need to reconsider the value
+    //private static final double BETA_CRUCIAL_TIME_ChANGE = - 0.1; //TODO: need to reconsider the value
     private static final double PENALTY_FOR_VEHICLE_CAPACITY_VIOLATION = -10000;
 
     private final long SEED = 4711; // MATSim default Random Seed
@@ -62,8 +62,6 @@ public class MultiObjectiveNSGAII {
     private double SEARCH_RADIUS_DESTINATION = 1500; // search radius for destination station
 
     // Helpers for the UAM problem =====================================================================================
-    private final double THRESHOLD_FOR_TRIPS_LONGER_THAN = SEARCH_RADIUS_ORIGIN;
-    private final String THRESHOLD_FOR_TRIPS_LONGER_THAN_STRING = String.valueOf(THRESHOLD_FOR_TRIPS_LONGER_THAN);
     private static final int SHARED_RIDE_TRAVEL_TIME_CHANGE_THRESHOLD = 700;
 
     // Data container for the UAM problem ==============================================================================
@@ -83,21 +81,15 @@ public class MultiObjectiveNSGAII {
             (a, b) -> Double.compare(a.getFitness()[0], b.getFitness()[0])  // Min heap
     );
     private static final int MAX_BEST_SOLUTIONS = 100;  // Adjust as needed
-    //private final Map<String, Double> finalSolutionTravelTimeChanges = new HashMap<>(); // Additional field to store travel time change of each trip for the final best feasible solution
-    //private final Map<String, Double> finalSolutionFlightDistanceChanges = new HashMap<>(); // Additional field to store saved flight distance of each trip for the final best feasible solution
-    //private final Map<String, Double> finalSolutionDepartureRedirectionRate = new HashMap<>(); // Additional field to store redirection rate of each trip for the final best feasible solution
-    //private final Map<String, Double> finalSolutionArrivalRedirectionRate = new HashMap<>(); // Additional field to store redirection rate of each trip for the final best feasible solution
-    //private final Map<String, Double> finalSolutionTotalTravelTime = new HashMap<>(); // Additional field to store total travel time of each trip for the final best feasible solution
-    //private final Map<String, String> finalSolutionAssignedAccessStation = new HashMap<>(); // Additional field to store assigned access station of each trip for the final best feasible solution
-    //private final Map<String, String> finalSolutionAssignedEgressStation = new HashMap<>(); // Additional field to store assigned egress station of each trip for the final best feasible solution
 
     // Parallel computing
     private static final int numProcessors = Runtime.getRuntime().availableProcessors();
     private static final int bufferDivider = 1;
+
+    // io paths
     private static String uamScenarioInputPath = "scenarios/1-percent/uam-scenario_400";
     private String outputFile = "src/main/java/org/eqasim/sao_paulo/siting/ga/results/vertiports_400";
     // TODO: Create an initial population of solutions using domain-specific knowledge (in our case is the vehicles which were used to create the initial fleet of the vehicles).
-    // TODO: How to handle the extremely large travel time?
 
     // Static initializer block
     static {
@@ -135,7 +127,7 @@ public class MultiObjectiveNSGAII {
         instance.runAlgorithm();
     }
 
-    // Main method to run the the specifyed algorithm ==================================================================
+    // Main method to run the the specified algorithm ==================================================================
     public double[] callAlgorithm(String[] args) throws IOException, InterruptedException {
         if (args.length < 4) {
             System.out.println("Usage: java MultiObjectiveNSGAII <BUFFER_END_TIME> <SEARCH_RADIUS_ORIGIN> <SEARCH_RADIUS_DESTINATION> <ENABLE_LOCAL_SEARCH>");
@@ -151,7 +143,7 @@ public class MultiObjectiveNSGAII {
         return instance.runAlgorithm();
     }
     public double[] runAlgorithm() {
-        // Randomly select 10% trips from the list of subTrips
+        // Randomly select a share of trips from the list of subTrips
         subTrips = trips.stream()
                 .filter(trip -> trip.getDepartureTime() >= BUFFER_START_TIME && trip.getDepartureTime() < BUFFER_END_TIME) // Add the filter
                 .filter(trip -> rand.nextDouble() <= 1)
@@ -342,7 +334,7 @@ public class MultiObjectiveNSGAII {
             }
         }*/
 
-        //synchronize the block that checks for empty vehicle list and adds a new vehicle (i.e., vehicle has capacity) after checking the egress constraint
+        // synchronize the block that checks for empty vehicle list and adds a new vehicle (i.e., vehicle has capacity) after checking the egress constraint
         synchronized (tripVehicleMap) {
             // Add a new vehicle for the trip when there is no available vehicle
             if (vehicleList == null || vehicleList.isEmpty()) {
@@ -372,8 +364,7 @@ public class MultiObjectiveNSGAII {
             //vehicleOccupancyMap.put(selectedVehicle, vehicleOccupancyMap.get(selectedVehicle) - 1);
 
         } else {
-            // Handle the case when there is no available vehicle: This might involve setting a default value or handling it in the fitness function
-            individual[i] = VALUE_FOR_NO_VEHICLE_AVAILABLE;
+            // Handle the case when there is no available vehicle
             throw new IllegalArgumentException("Need to handle the case when there is no available vehicle for the trip.");
         }
     }
@@ -512,7 +503,6 @@ public class MultiObjectiveNSGAII {
                 totalFitness += ALPHA * (-1) * savedFlightDistance;
                 tripFlightDistanceChange -= savedFlightDistance;
                 if(isFinalSolutions){
-                    //finalSolutionFlightDistanceChanges.put(trip.getTripId(), tripFlightDistanceChange);
                     indicatorData.setFlightDistanceChanges(trip.getTripId(), tripFlightDistanceChange);
                 }
                 // calculate change in flight time due to the change in flight distance
@@ -533,7 +523,6 @@ public class MultiObjectiveNSGAII {
                 tripTimeChange += additionalTravelTimeDueToEgressMatching;
 
                 if(isFinalSolutions){
-                    //finalSolutionTravelTimeChanges.put(trip.getTripId(), tripTimeChange);
                     indicatorData.setTravelTimeChanges(trip.getTripId(), tripTimeChange);
                 }
 
@@ -541,23 +530,18 @@ public class MultiObjectiveNSGAII {
 
                 if(isFinalSolutions){
                     double departureRedirectionRate = ( trip.calculateAccessTeleportationDistance(originStationOfVehicle) - trip.calculateAccessTeleportationDistance(trip.getOriginStation()) ) / ( trip.calculateAccessTeleportationDistance(trip.getOriginStation()) );
-                    //finalSolutionDepartureRedirectionRate.put(trip.getTripId(), departureRedirectionRate);
                     indicatorData.setDepartureRedirectionRate(trip.getTripId(), departureRedirectionRate);
                     double arrivalRedirectionRate = ( trip.calculateEgressTeleportationDistance(destinationStationOfVehicle) - trip.calculateEgressTeleportationDistance(trip.getDestinationStation()) ) / ( trip.calculateEgressTeleportationDistance(trip.getDestinationStation()) );
-                    //finalSolutionArrivalRedirectionRate.put(trip.getTripId(), arrivalRedirectionRate);
                     indicatorData.setArrivalRedirectionRate(trip.getTripId(), arrivalRedirectionRate);
 
                     // total travel time for the trip
                     //TODO: Should the accessTime = boardingTimeForAllTrips - trip.getDepartureTime()?
                     tripTotalTravelTime = trip.calculateAccessTeleportationTime(originStationOfVehicle) + trip.calculateFlightDistance(originStationOfVehicle, destinationStationOfVehicle) / VEHICLE_CRUISE_SPEED + trip.calculateEgressTeleportationTime(destinationStationOfVehicle);
-                    //finalSolutionTotalTravelTime.put(trip.getTripId(), tripTotalTravelTime);
                     indicatorData.setTotalTravelTime(trip.getTripId(), tripTotalTravelTime);
 
                     // assigned origin station
-                    //finalSolutionAssignedAccessStation.put(trip.getTripId(), originStationOfVehicle.getId().toString());
                     indicatorData.setAssignedAccessStation(trip.getTripId(), originStationOfVehicle.getId().toString());
                     // assigned destination station
-                    //finalSolutionAssignedEgressStation.put(trip.getTripId(), destinationStationOfVehicle.getId().toString());
                     indicatorData.setAssignedEgressStation(trip.getTripId(), destinationStationOfVehicle.getId().toString());
                 }
                 totalDistanceChange += tripFlightDistanceChange;
@@ -579,7 +563,6 @@ public class MultiObjectiveNSGAII {
         totalFitness += ALPHA * flightDistanceChange;
         tripFlightDistanceChange += flightDistanceChange;
         if(isFinalSolutions){
-            //finalSolutionFlightDistanceChanges.put(trip.getTripId(), tripFlightDistanceChange);
             indicatorData.setFlightDistanceChanges(trip.getTripId(), tripFlightDistanceChange);
         }
         // calculate change in flight time due to the change in flight distance
@@ -600,7 +583,6 @@ public class MultiObjectiveNSGAII {
         tripTimeChange += travelTimeChangeDueToEgressMatching;
 
         if(isFinalSolutions){
-            //finalSolutionTravelTimeChanges.put(trip.getTripId(), tripTimeChange);
             indicatorData.setTravelTimeChanges(trip.getTripId(), tripTimeChange);
         }
 
@@ -608,22 +590,17 @@ public class MultiObjectiveNSGAII {
 
         if(isFinalSolutions){
             double departureRedirectionRate = ( trip.calculateAccessTeleportationDistance(originStationOfVehicle) - trip.calculateAccessTeleportationDistance(trip.getOriginStation()) ) / ( trip.calculateAccessTeleportationDistance(trip.getOriginStation()) );
-            //finalSolutionDepartureRedirectionRate.put(trip.getTripId(), departureRedirectionRate);
             indicatorData.setDepartureRedirectionRate(trip.getTripId(), departureRedirectionRate);
             double arrivalRedirectionRate = ( trip.calculateEgressTeleportationDistance(destinationStationOfVehicle) - trip.calculateEgressTeleportationDistance(trip.getDestinationStation()) ) / ( trip.calculateEgressTeleportationDistance(trip.getDestinationStation()) );
-            //finalSolutionArrivalRedirectionRate.put(trip.getTripId(), arrivalRedirectionRate);
             indicatorData.setArrivalRedirectionRate(trip.getTripId(), arrivalRedirectionRate);
 
             // total travel time for the trip
             double totalTravelTime = trip.calculateAccessTeleportationTime(originStationOfVehicle) + trip.calculateFlightDistance(originStationOfVehicle, destinationStationOfVehicle) / VEHICLE_CRUISE_SPEED + trip.calculateEgressTeleportationTime(destinationStationOfVehicle);
-            //finalSolutionTotalTravelTime.put(trip.getTripId(), totalTravelTime);
             indicatorData.setTotalTravelTime(trip.getTripId(), totalTravelTime);
 
             // assigned origin station
-            //finalSolutionAssignedAccessStation.put(trip.getTripId(), originStationOfVehicle.getId().toString());
             indicatorData.setAssignedAccessStation(trip.getTripId(), originStationOfVehicle.getId().toString());
             // assigned destination station
-            //finalSolutionAssignedEgressStation.put(trip.getTripId(), destinationStationOfVehicle.getId().toString());
             indicatorData.setAssignedEgressStation(trip.getTripId(), destinationStationOfVehicle.getId().toString());
         }
         return totalFitness;
@@ -699,18 +676,7 @@ public class MultiObjectiveNSGAII {
                     existingVehicles.addAll(vehicles);
 
                     tripVehicleMap.put(trip.getTripId(), existingVehicles);
-                } /*else {
-                    if (trip.calculateAccessTeleportationDistance(station)> THRESHOLD_FOR_TRIPS_LONGER_THAN){
-                        NUMBER_OF_TRIPS_LONGER_TAHN++;
-                    }
-
-                    // ----- Add a new vehicle for the trip when the access teleportation distance is longer than the search radius
-                    List<UAMVehicle> vehicleList = tripVehicleMap.getOrDefault(trip.getTripId(), new ArrayList<>());
-                    UAMVehicle vehicle = feedDataForVehicleCreation(trip, false);
-                    vehicleList.add(vehicle);
-                    tripVehicleMap.put(trip.getTripId(), vehicleList);
-                    //vehicleOccupancyMap.put(vehicle, VEHICLE_CAPACITY);
-                }*/
+                }
             }
         }
         return tripVehicleMap;
@@ -953,7 +919,6 @@ public class MultiObjectiveNSGAII {
         }
         int[] quickFixedSolution = guaranteeFeasibleSolution(bestSolutionButMaybeInfeasible.getSolution());
         return new SolutionFitnessPair(quickFixedSolution, calculateFitness(quickFixedSolution, null, false).getFitness());
-        //throw new IllegalStateException("No feasible solution found in the entire population");
     }
     // Helper method to check if a solution violates vehicle capacity constraints
     private static boolean isFeasible(int[] solution, boolean isPrintCapacityViolation) {
@@ -1316,7 +1281,7 @@ public class MultiObjectiveNSGAII {
         public double getPercentile95thTotalTravelTime() { return percentile95thTotalTravelTime; }
         public void setPercentile95thTotalTravelTime(double percentile95thTotalTravelTime) { this.percentile95thTotalTravelTime = percentile95thTotalTravelTime; }
 
-        // My adding: setArrivalRedirectionRate, setDepartureRedirectionRate, setTotalTravelTime, setAssignedAccessStation, setAssignedEgressStation
+        // setArrivalRedirectionRate, setDepartureRedirectionRate, setTotalTravelTime, setAssignedAccessStation, setAssignedEgressStation
         public void setTravelTimeChanges(String tripId, Double travelTimeChanges) {
             this.travelTimeChanges.put(tripId, travelTimeChanges);
         }
@@ -1444,24 +1409,7 @@ public class MultiObjectiveNSGAII {
 
     // Method to create UAM vehicles and assign them to stations in the initialization phase (could also be used in later stage)
     private void saveStationVehicleNumber(List<UAMTrip> subTrips) {
-
-/*        // Loop through the stations so that we can assign at least 1 to each station before we assign more vehicles based on the demand
-        for (UAMStation station : stations.values()) {
-            UAMVehicle vehicle = createVehicle(station, vehicleTypes.get(vehicleTypeId));
-
-            // Get the station ID
-            Id<UAMStation> stationId = station.getId();
-            // Check if there is already a list for this station ID, if not, create one
-            List<UAMVehicle> vehiclesAtStation = originStationVehicleMap.computeIfAbsent(stationId, k -> new ArrayList<>());
-            // Add the new vehicle to the list
-            vehiclesAtStation.add(vehicle);
-            vehicles.put(vehicle.getId(), vehicle);
-            vehicleOriginStationMap.put(vehicle.getId(), station);
-            vehicleDestinationStationMap.put(vehicle.getId(), ?);
-            originStationVehicleMap.put(stationId, vehiclesAtStation);
-        }*/
-
-        // save the station's vehicle number for the current time based on the UAMTrips' origin station
+        // save the station's vehicle number for the current time based on the UAMTrips' origin and destination station
         for (UAMTrip subTrip : subTrips) {
             feedDataForVehicleCreation(subTrip, true);
         }
@@ -1539,7 +1487,7 @@ public class MultiObjectiveNSGAII {
         return nearestStation;
     }
 
-    // read demand select randomly =====================================================================================
+    // read demand =====================================================================================================
     public static List<UAMTrip> readTripsFromCsv(String filePath) {
         List<UAMTrip> trips = new ArrayList<>();
 
@@ -1572,175 +1520,6 @@ public class MultiObjectiveNSGAII {
         String income = "0";
 
         return new UAMTrip(tripId, originX, originY, destX, destY, departureTime, flightDistance, origStation, destStation, purpose, income);
-    }
-
-    public static class ThreadCounter {
-        private int processes;
-
-        public synchronized void register() {
-            processes++;
-        }
-
-        public synchronized void deregister() {
-            processes--;
-        }
-
-        public synchronized int getProcesses() {
-            return processes;
-        }
-    }
-
-    // Google OR tools (version: 9.10.4067) ============================================================================
-    static {
-        // Load the OR-Tools native library
-        Loader.loadNativeLibraries();
-    }
-
-    private void repairInfeasibleSolutions(int numProcessors, ExecutorService executorService, ArrayBlockingQueue<SolutionFitnessPair> queue) throws InterruptedException {
-        // Add all infeasible solutions to the queue
-        for (SolutionFitnessPair solutionPair : solutionsHeap) {
-            if (!isFeasible(solutionPair.getSolution(), true)) {
-                queue.add(solutionPair);
-            } else {
-                repairedSolutionsHeap.add(solutionPair); // TODO: could also be "simulated annealed" for better performance
-            }
-        }
-
-        ThreadCounter threadCounter = new ThreadCounter();
-        int counter = 0;
-        int taskSize = queue.size();
-        if (!queue.isEmpty()) {
-            log.info("Constraint Programming (CP) starts...");
-        }
-        log.info("Queue size is: " + taskSize);
-        while (!queue.isEmpty()) {
-            while (threadCounter.getProcesses() >= numProcessors/bufferDivider - 1)
-                Thread.sleep(200);
-
-            SolutionFitnessPair solutionPair = queue.poll();
-            if (solutionPair != null) {
-                executorService.execute(new Runnable() {
-                    @Override
-                    public void run() {
-                        threadCounter.register();
-                        try {
-                            int[] solution = solutionPair.getSolution();
-                            if (fixInfeasibleSolutionWithORTools(solution)) {
-                                repairedSolutionsHeap.add(calculateFitness(solution, null, false));
-                            }
-                        } finally {
-                            threadCounter.deregister();
-                        }
-                    }
-                });
-            }
-
-            counter++;
-            log.info("Calculation completion: " + counter + "/" + taskSize + " (" + String.format("%.0f", (double) counter / taskSize * 100) + "%).");
-        }
-        executorService.shutdown();
-    }
-
-    private boolean fixInfeasibleSolutionWithORTools(int[] solution) {
-        Solver solver = null;
-        try {
-            solver = new Solver("FixInfeasibleSolution");
-
-            int numTrips = solution.length;
-
-            // Variables: Vehicle assignment for each trip
-            IntVar[] vehicleAssignments = new IntVar[numTrips];
-            for (int i = 0; i < numTrips; i++) {
-                UAMTrip trip = subTrips.get(i);
-                List<UAMVehicle> availableVehicles = tripVehicleMap.get(trip.getTripId());
-                int[] availableVehicleIds = availableVehicles.stream().mapToInt(v -> Integer.parseInt(v.getId().toString())).toArray();
-
-                // Define the domain of the variable to be the available vehicles for this trip
-                vehicleAssignments[i] = solver.makeIntVar(availableVehicleIds, "vehicle_" + i);
-            }
-
-            // Constraints: Each vehicle cannot exceed its capacity
-            for (int vehicleId : tripVehicleMap.values().stream().flatMap(List::stream).mapToInt(v -> Integer.parseInt(v.getId().toString())).distinct().toArray()) {
-                IntVar vehicleCapacityUsage = solver.makeIntVar(0, VEHICLE_CAPACITY, "vehicleCapacityUsage_" + vehicleId);
-                IntVar[] vehicleLoad = new IntVar[numTrips];
-                for (int i = 0; i < numTrips; i++) {
-                    vehicleLoad[i] = solver.makeIsEqualCstVar(vehicleAssignments[i], vehicleId);
-                }
-                solver.addConstraint(solver.makeEquality(vehicleCapacityUsage, solver.makeSum(vehicleLoad)));
-                solver.addConstraint(solver.makeLessOrEqual(vehicleCapacityUsage, VEHICLE_CAPACITY));
-            }
-
-            // Objective: Minimize the number of changes in vehicle assignments and prefer pooling
-            int[] initialAssignments = Arrays.copyOf(solution, solution.length);
-            IntVar[] assignmentChanges = new IntVar[numTrips];
-            for (int i = 0; i < numTrips; i++) {
-                assignmentChanges[i] = solver.makeIsDifferentCstVar(vehicleAssignments[i], initialAssignments[i]);
-            }
-            IntVar totalChanges = solver.makeSum(assignmentChanges).var();
-
-            // Preference for pooling: Add soft constraints to prefer pooling trips rather than assigning them to empty vehicles
-            IntVar[] poolingPenalty = new IntVar[numTrips];
-            for (int i = 0; i < numTrips; i++) {
-                IntVar penalty = solver.makeIntVar(0, VEHICLE_CAPACITY * VEHICLE_CAPACITY, "penalty_" + i);
-
-                // Calculate the penalty based on the number of empty seats
-                for (int vehicleId : tripVehicleMap.get(subTrips.get(i).getTripId()).stream().mapToInt(v -> Integer.parseInt(v.getId().toString())).toArray()) {
-                    IntVar vehicleLoad = solver.makeIntVar(0, VEHICLE_CAPACITY, "vehicleLoad_" + i);
-                    for (int j = 0; j < numTrips; j++) {
-                        vehicleLoad = solver.makeSum(vehicleLoad, solver.makeIsEqualCstVar(vehicleAssignments[j], vehicleId)).var();
-                    }
-                    IntVar emptySeats = solver.makeDifference(VEHICLE_CAPACITY, vehicleLoad).var();
-                    penalty = solver.makeSum(penalty, solver.makeProd(emptySeats, emptySeats)).var(); // Penalize more for more empty seats
-                }
-                poolingPenalty[i] = penalty;
-            }
-            IntVar totalPoolingPenalty = solver.makeSum(poolingPenalty).var();
-
-            // Combine the objectives
-            IntVar combinedObjective = solver.makeSum(totalChanges, totalPoolingPenalty).var();
-            OptimizeVar objective = solver.makeMinimize(combinedObjective, 1);
-
-            // Set up the search parameters with the number of workers (threads)
-            // There is no direct way to set the number of threads in the CP solver in Java as in other APIs.
-            // But OR-Tools generally respects the system's thread settings, you can try using environment variables.
-
-            // Solve the problem
-            DecisionBuilder db = solver.makePhase(vehicleAssignments, Solver.CHOOSE_FIRST_UNBOUND, Solver.ASSIGN_MIN_VALUE);
-            solver.newSearch(db, objective);
-
-            boolean feasibleSolutionFound = false;
-            while (solver.nextSolution()) {
-/*                boolean allConstraintsSatisfied = true;
-                for (int vehicleId : tripVehicleMap.values().stream().flatMap(List::stream).mapToInt(v -> Integer.parseInt(v.getId().toString())).distinct().toArray()) {
-                    int vehicleUsage = 0;
-                    for (int i = 0; i < numTrips; i++) {
-                        if (vehicleAssignments[i].value() == vehicleId) {
-                            vehicleUsage++;
-                        }
-                    }
-                    if (vehicleUsage > VEHICLE_CAPACITY) {
-                        allConstraintsSatisfied = false;
-                        break;
-                    }
-                }*/
-                //if (allConstraintsSatisfied) {
-                for (int i = 0; i < numTrips; i++) {
-                    solution[i] = (int) vehicleAssignments[i].value();
-                }
-                feasibleSolutionFound = true;
-                break;
-                //}
-            }
-            solver.endSearch();
-            return feasibleSolutionFound;
-        } finally {
-            if (solver != null) {
-                solver = null;  // Ensure the solver is closed properly
-            }
-            // Suggest the JVM run garbage collection
-            System.gc();
-            System.runFinalization();
-        }
     }
 
 }
