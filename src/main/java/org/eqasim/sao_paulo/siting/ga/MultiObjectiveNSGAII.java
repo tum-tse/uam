@@ -12,15 +12,11 @@ import net.bhl.matsim.uam.infrastructure.UAMVehicle;
 import net.bhl.matsim.uam.infrastructure.UAMVehicleType;
 
 import org.apache.log4j.Logger;
-import com.google.ortools.Loader;
-import com.google.ortools.constraintsolver.*;
-import com.google.ortools.constraintsolver.IntVar;
 import org.matsim.core.network.NetworkUtils;
 import org.matsim.core.network.io.MatsimNetworkReader;
 
 import java.io.IOException;
 import java.util.*;
-import java.util.concurrent.*;
 import java.util.stream.Collectors;
 import java.nio.file.Files;
 import java.nio.file.Paths;
