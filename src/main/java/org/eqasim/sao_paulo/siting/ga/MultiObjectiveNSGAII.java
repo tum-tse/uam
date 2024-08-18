@@ -56,14 +56,14 @@ public class MultiObjectiveNSGAII {
     private static final int VEHICLE_CAPACITY = 4; // Vehicle capacity
 
     // Variables for the UAM problem ===================================================================================
-    private static double BUFFER_START_TIME = 3600*7; // Buffer start time for the first trip
-    private static double BUFFER_END_TIME = 3600*7+600; // Buffer end time for the last trip
-    private static double SEARCH_RADIUS_ORIGIN = 1500; // search radius for origin station
-    private static double SEARCH_RADIUS_DESTINATION = 1500; // search radius for destination station
+    private double BUFFER_START_TIME = 3600*7; // Buffer start time for the first trip
+    private double BUFFER_END_TIME = 3600*7+600; // Buffer end time for the last trip
+    private double SEARCH_RADIUS_ORIGIN = 1500; // search radius for origin station
+    private double SEARCH_RADIUS_DESTINATION = 1500; // search radius for destination station
 
     // Helpers for the UAM problem =====================================================================================
-    private static final double THRESHOLD_FOR_TRIPS_LONGER_THAN = SEARCH_RADIUS_ORIGIN;
-    private static final String THRESHOLD_FOR_TRIPS_LONGER_THAN_STRING = String.valueOf(THRESHOLD_FOR_TRIPS_LONGER_THAN);
+    private final double THRESHOLD_FOR_TRIPS_LONGER_THAN = SEARCH_RADIUS_ORIGIN;
+    private final String THRESHOLD_FOR_TRIPS_LONGER_THAN_STRING = String.valueOf(THRESHOLD_FOR_TRIPS_LONGER_THAN);
     private static final int SHARED_RIDE_TRAVEL_TIME_CHANGE_THRESHOLD = 700;
 
     // Data container for the UAM problem ==============================================================================
@@ -136,7 +136,7 @@ public class MultiObjectiveNSGAII {
     }
 
     // Main method to run the the specifyed algorithm ==================================================================
-    public static double[] callAlgorithm(String[] args) throws IOException, InterruptedException {
+    public double[] callAlgorithm(String[] args) throws IOException, InterruptedException {
         if (args.length < 4) {
             System.out.println("Usage: java MultiObjectiveNSGAII <BUFFER_END_TIME> <SEARCH_RADIUS_ORIGIN> <SEARCH_RADIUS_DESTINATION> <ENABLE_LOCAL_SEARCH>");
             System.exit(1);
@@ -1435,7 +1435,7 @@ public class MultiObjectiveNSGAII {
     }
 
     // Initial data extraction methods =================================================================================
-    private static ArrayList<UAMTrip> extractSubTrips(List<UAMTrip> uamTrips) {
+    private ArrayList<UAMTrip> extractSubTrips(List<UAMTrip> uamTrips) {
         // extract sub trips from uamTrips based on the departure time of trips falling between buffer start and end time
         return uamTrips.stream()
                 .filter(trip -> trip.getDepartureTime() >= BUFFER_START_TIME && trip.getDepartureTime() < BUFFER_END_TIME)
@@ -1494,7 +1494,7 @@ public class MultiObjectiveNSGAII {
         return vehicle;
     }
     // vehicle creator function
-    private static UAMVehicle createVehicle(UAMStation uamStation) {
+    private UAMVehicle createVehicle(UAMStation uamStation) {
         /*        UAMVehicleType vehicleType = new UAMVehicleType(id, capacity, range, horizontalSpeed, verticalSpeed,
                 boardingTime, deboardingTime, turnAroundTime, energyConsumptionVertical, energyConsumptionHorizontal,
                 maximumCharge);*/

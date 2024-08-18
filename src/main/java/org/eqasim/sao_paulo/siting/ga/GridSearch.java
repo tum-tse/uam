@@ -48,7 +48,7 @@ public class GridSearch {
                                     String.valueOf(finalSrd), // SEARCH_RADIUS_DESTINATION
                                     String.valueOf(false)  // ENABLE_LOCAL_SEARCH
                             };
-                            return MultiObjectiveNSGAII.callAlgorithm(multiObjectiveArgs);
+                            return new MultiObjectiveNSGAII().callAlgorithm(multiObjectiveArgs);
                         }
                     });
 

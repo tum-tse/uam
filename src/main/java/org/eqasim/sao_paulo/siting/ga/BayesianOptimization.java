@@ -172,7 +172,7 @@ public class BayesianOptimization {
     }
 
     private double evaluateParameters(int poolingTimeWindow, int searchRadiusOrigin, int searchRadiusDestination) throws IOException, InterruptedException {
-        double[] actualPerformance = MultiObjectiveNSGAII.callAlgorithm(new String[]{
+        double[] actualPerformance = new MultiObjectiveNSGAII().callAlgorithm(new String[]{
                 String.valueOf(poolingTimeWindow),
                 String.valueOf(searchRadiusOrigin),
                 String.valueOf(searchRadiusDestination),
